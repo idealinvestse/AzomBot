@@ -3,9 +3,19 @@
 import json
 import os
 
+from .vector_store_service import VectorStoreService
+from functools import lru_cache
+
 class RAGService:
     """Retrieval-Augmented Generation service för AZOM kunskapsbas."""
     def __init__(self):
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../data'))
+        self.vector_store = None
+        try:
+            self.vector_store = VectorStoreService(data_dir)
+        except Exception:
+            # fall back to keyword
+            pass
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../data'))
         self.products_path = os.path.join(data_dir, 'products.json')
         self.troubleshooting_path = os.path.join(data_dir, 'troubleshooting.json')
@@ -20,6 +30,12 @@ class RAGService:
                     pass
 
     async def search(self, query: str, top_k: int = 5):
+        # 1. Try vector store if available
+        if self.vector_store:
+            docs = self.vector_store.similarity_search(query, top_k)
+            return [{"title": f"Match {i+1}", "content": txt} for i, (txt, _) in enumerate(docs)]
+
+        # Fallback keyword search
         results = []
         query_lower = query.lower()
         # 1. Sök i produkter (installation)

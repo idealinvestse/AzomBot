@@ -14,6 +14,7 @@ import os
 from typing import List, Dict, Any, Optional
 
 import httpx
+from functools import lru_cache
 
 __all__ = ["LLMClient"]
 
@@ -22,11 +23,11 @@ class LLMClient:
     """Very small async client for chat completion requests."""
 
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None, timeout: int = 30):
-        self.base_url = base_url or os.getenv("OPENWEBUI_API_URL", "http://localhost:3000/api")
-        # Normalise: allow users to pass full path including /api or not
-        self.base_url = self.base_url.rstrip("/")
+        self.base_url = (base_url or os.getenv("OPENWEBUI_API_URL", "http://localhost:3000/api")).rstrip("/")
         self.api_key = api_key or os.getenv("OPENWEBUI_API_KEY")
         self._timeout = timeout
+        # Reuse a single AsyncClient with keep-alive
+        self._client: httpx.AsyncClient | None = None
 
     async def chat(self, messages: List[Dict[str, str]], model: Optional[str] = None, stream: bool = False) -> str:
         """Send an OpenAI-style chat completion request and return the assistant message string.
@@ -46,10 +47,18 @@ class LLMClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        if self._client is None or self._client.is_closed:
+            # create lazily, reuse thereafter
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+
+        resp = await self._client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
 
         # OpenAI-style return shape
         return data["choices"][0]["message"]["content"].strip()
+
+    async def aclose(self) -> None:
+        """Close underlying httpx client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
