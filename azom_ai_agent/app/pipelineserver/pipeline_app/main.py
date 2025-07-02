@@ -10,6 +10,8 @@ from .config import settings
 from .database import get_db
 from .pipelines.azom_installation_pipeline import AZOMInstallationPipeline
 from .pipelines.support_pipeline import SupportPipeline
+from .services.llm_client import LLMClient
+from .services.rag_service import RAGService
 from .admin.products_api import router as products_admin_router
 from .admin.faq_api import router as faq_admin_router
 from .admin.troubleshooting_api import router as troubleshooting_admin_router
@@ -39,6 +41,8 @@ app.add_middleware(
 
 pipeline = AZOMInstallationPipeline()
 support_pipeline = SupportPipeline()
+rag_service = RAGService()
+llm_client = LLMClient()
 
 class PipelineInstallRequest(BaseModel):
     user_input: str
@@ -47,6 +51,10 @@ class PipelineInstallRequest(BaseModel):
 
 class SupportRequest(BaseModel):
     question: str
+
+class ChatRequest(BaseModel):
+    message: str
+    car_model: str | None = None
 
 @app.get("/health")
 def health_check():
@@ -86,6 +94,34 @@ async def install_pipeline(request: PipelineInstallRequest):
             status_code=500, 
             detail="Ett internt fel inträffade. Vänligen försök igen senare."
         )
+
+@app.post("/chat/azom")
+async def chat_with_azom(request: ChatRequest):
+    """Free-form chat endpoint that augments user query with RAG context and calls local OpenWebUI/Ollama via LLMClient."""
+    if not request.message or not request.message.strip():
+        raise HTTPException(status_code=422, detail="Message is required")
+    # 1. Fetch context via simple keyword search RAG
+    context_items = await rag_service.search(f"{request.car_model or ''} {request.message}", top_k=3)
+    context_snippets = "\n".join([f"- {c['content']}" for c in context_items])
+
+    system_prompt = (
+        "Du är AZOM Installations-Expert, en hjälpsam AI som svarar på svenska. "
+        "Använd installations- och felsökningskontexten nedan om relevant."
+    )
+    if context_snippets:
+        system_prompt += f"\n\nRelevant kontext:\n{context_snippets}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": request.message.strip()},
+    ]
+    try:
+        assistant_reply = await llm_client.chat(messages)
+        return {"assistant": assistant_reply, "context_used": context_items}
+    except Exception as e:
+        logger.exception("LLM chat failed")
+        raise HTTPException(status_code=500, detail="LLM error: " + str(e))
+
 
 @app.post("/api/v1/support")
 async def get_support(request: SupportRequest):
