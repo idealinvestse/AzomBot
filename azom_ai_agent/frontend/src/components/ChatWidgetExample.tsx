@@ -20,19 +20,19 @@ const ChatWidgetExample: React.FC = () => {
     ]);
     setTyping(true);
     try {
-      const res = await fetch("/tool/diagnose", {
+      const res = await fetch("/chat/azom", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ user_prompt: text, context: {} }),
+        body: JSON.stringify({ message: text }),
       });
       const data = await res.json();
       setMessages((prev) => [
         ...prev,
         {
           id: uuid(),
-          text: data.diagnosis ?? "(inget svar)",
+          text: data.answer ?? data.reply ?? data.response ?? "(inget svar)",
           sender: "bot",
           timestamp: new Date(),
           status: "sent",

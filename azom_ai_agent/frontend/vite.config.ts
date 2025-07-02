@@ -14,12 +14,16 @@ export default defineConfig({
     port: 5173,
     open: true,
     proxy: {
-      "/tool": {
-        target: "http://localhost:8008",
+      "/chat": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+      },
+      "/pipeline": {
+        target: "http://localhost:8001",
         changeOrigin: true,
       },
       "/admin": {
-        target: "http://localhost:8008",
+        target: "http://localhost:8001",
         changeOrigin: true,
       },
       "/ping": {

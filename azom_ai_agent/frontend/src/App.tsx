@@ -5,9 +5,9 @@ import {
   Route,
   NavLink,
 } from "react-router-dom";
-import { LayoutDashboard, MessageCircle, Settings, FileText, Activity, Sliders, BarChart2 } from "lucide-react";
+import { LayoutDashboard, MessageCircle, FileText, Activity, Sliders, BarChart2 } from "lucide-react";
 import ChatPage from "@/pages/ChatPage";
-import SettingsPage from "@/pages/SettingsPage";
+// SettingsPage removed
 import LogsPage from "@/pages/LogsPage";
 import StatusPage from "@/pages/StatusPage";
 import CustomizePage from "@/pages/CustomizePage";
@@ -34,9 +34,6 @@ function Sidebar() {
         <NavLink to="/status" className={linkClass}>
           <Activity className="h-4 w-4" />Status
         </NavLink>
-        <NavLink to="/settings" className={linkClass}>
-          <Settings className="h-4 w-4" />Settings
-        </NavLink>
         <NavLink to="/customize" className={linkClass}>
           <Sliders className="h-4 w-4" />Anpassa
         </NavLink>
@@ -59,7 +56,6 @@ export default function App() {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/status" element={<StatusPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/customize" element={<CustomizePage />} />
             <Route path="/stats" element={<StatsPage />} />
           </Routes>
