@@ -25,5 +25,3 @@ env/
 *.csv
 *.json
 
-# Documentation files
-*.md
