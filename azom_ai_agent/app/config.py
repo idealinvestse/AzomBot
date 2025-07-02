@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     HOST: str = "0.0.0.0"
     PORT: int = 8008
-    OPENWEBUI_URL: str = "http://titanic.urem.org:3000"
-    OPENWEBUI_API_TOKEN: str = "DUMMY"  # Default för tests/utv
+    OPENWEBUI_URL: str = "http://192.168.50.164:3000"
+    OPENWEBUI_API_TOKEN: str = "sk-34c40884f61b46fd824629f88cfbf1f0"  # Default för tests/utv
     TARGET_MODEL: str = "azom-se-general"
     DATA_PATH: Path = Path("data")
     KNOWLEDGE_CACHE_TTL: int = 3600
