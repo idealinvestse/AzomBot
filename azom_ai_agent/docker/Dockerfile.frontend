@@ -1,0 +1,36 @@
+# Frontend Dockerfile för AZOM AI Agent
+FROM node:20-alpine AS builder
+
+# Arbetskataloger
+WORKDIR /app
+
+# Kopiera package.json för att dra nytta av Docker cache-lager
+COPY frontend/package*.json ./
+
+# Installera dependencies
+RUN npm ci
+
+# Kopiera källkod
+COPY frontend/ ./
+
+# Bygg för produktion
+RUN npm run build
+
+# Production image
+FROM nginx:alpine AS runtime
+
+# Kopiera byggda filer från builder-steget till Nginx server
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Kopiera Nginx konfiguration
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Exponera port
+EXPOSE 5173
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:5173/ || exit 1
+
+# Starta Nginx i förgrunden
+CMD ["nginx", "-g", "daemon off;"]

@@ -23,7 +23,7 @@ class LLMClient:
     """Very small async client for chat completion requests."""
 
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None, timeout: int = 30):
-        self.base_url = (base_url or os.getenv("OPENWEBUI_API_URL", "http://localhost:3000/api")).rstrip("/")
+        self.base_url = (base_url or os.getenv("OPENWEBUI_API_URL", "http://192.168.50.164:3000/api")).rstrip("/")
         self.api_key = api_key or os.getenv("OPENWEBUI_API_KEY")
         self._timeout = timeout
         # Reuse a single AsyncClient with keep-alive

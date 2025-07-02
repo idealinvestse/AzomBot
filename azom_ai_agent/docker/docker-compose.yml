@@ -2,30 +2,84 @@ version: '3.9'
 services:
   core_api:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8008
-    env_file: .env
+    env_file: ../.env
     ports:
       - "8008:8008"
     volumes:
-      - ./data:/app/data
+      - ../data:/app/data
+      - ../logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8008/ping"]
       interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 5s
     restart: unless-stopped
+    networks:
+      - azom_network
 
   pipeline_server:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
     command: uvicorn app.pipelineserver.pipeline_app.main:app --host 0.0.0.0 --port 8001
-    env_file: .env
+    env_file: ../.env
     ports:
       - "8001:8001"
     volumes:
-      - ./data:/app/data
+      - ../data:/app/data
+      - ../logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
+      timeout: 10s
       retries: 3
+      start_period: 5s
     restart: unless-stopped
+    networks:
+      - azom_network
+    depends_on:
+      - core_api
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8001
+    depends_on:
+      - pipeline_server
+    networks:
+      - azom_network
+
+  # Valfri PostgreSQL-databas (aktiveras via miljövariabler)
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-azom}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-azompassword}
+      - POSTGRES_DB=${POSTGRES_DB:-azomdb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - azom_network
+    profiles:
+      - with-postgres
+
+volumes:
+  postgres_data:
+
+networks:
+  azom_network:
+    driver: bridge
