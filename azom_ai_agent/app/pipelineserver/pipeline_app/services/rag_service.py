@@ -30,10 +30,24 @@ class RAGService:
                     pass
 
     async def search(self, query: str, top_k: int = 5):
+        """
+        Söker efter relevanta dokument baserat på frågan.
+        
+        Args:
+            query: Sökfrågan som text
+            top_k: Maximalt antal resultat att returnera
+            
+        Returns:
+            Lista med matchande dokument
+        """
         # 1. Try vector store if available
         if self.vector_store:
-            docs = self.vector_store.similarity_search(query, top_k)
-            return [{"title": f"Match {i+1}", "content": txt} for i, (txt, _) in enumerate(docs)]
+            docs = await self.vector_store.similarity_search(query, top_k)
+            return [{
+                "title": f"Match {i+1}", 
+                "content": txt,
+                "similarity_score": score
+            } for i, (txt, score) in enumerate(docs)]
 
         # Fallback keyword search
         results = []

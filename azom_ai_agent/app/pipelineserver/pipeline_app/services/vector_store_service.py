@@ -61,9 +61,35 @@ class VectorStoreService:
     # ---------------------------------------------------------------------
     # Public API
     # ---------------------------------------------------------------------
-    def similarity_search(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
+    async def similarity_search(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
+        """
+        Utför en likhetssökning i vektorlagret.
+        
+        Args:
+            query: Sökfrågan som text
+            top_k: Maximalt antal resultat att returnera
+            
+        Returns:
+            Lista med tupler av (dokumenttext, likhetsscore)
+            
+        Raises:
+            RuntimeError: Om vektorindexet inte har byggts
+        """
         if self.index is None:
             raise RuntimeError("Vector store has not been built")
-        query_emb = self.model.encode([query], normalize_embeddings=True)
-        scores, idxs = self.index.search(query_emb, top_k)
+            
+        # OBS: encode-operationen är CPU-intensiv men inte I/O-blockande
+        # I en fullständig implementation bör detta köras i en ThreadPoolExecutor
+        # för att undvika att blockera event-loopen
+        import asyncio
+        loop = asyncio.get_event_loop()
+        query_emb = await loop.run_in_executor(
+            None, lambda: self.model.encode([query], normalize_embeddings=True)
+        )
+        
+        # FAISS-sökning är också CPU-intensiv
+        scores, idxs = await loop.run_in_executor(
+            None, lambda: self.index.search(query_emb, top_k)
+        )
+        
         return [(self.texts[i], float(scores[0][n])) for n, i in enumerate(idxs[0]) if i < len(self.texts)]

@@ -1,36 +1,78 @@
+import os
 import re
+import aiofiles
 from datetime import datetime
-from typing import Dict
+from pathlib import Path
+from typing import Dict, List, Any, Union, Optional
 
-def inject_prompt_vars(prompt: str, context: Dict[str, str]):
+async def inject_prompt_vars(prompt: str, context: Dict[str, Any]) -> str:
+    """
+    Ersätter variabler i prompten med värden från context.
+    
+    Args:
+        prompt: Prompttext med variabler på formen {{VAR_NAME}}
+        context: Dictionary med variabelvärden
+        
+    Returns:
+        Prompttext med ersätta variabler
+    """
     now = datetime.now()
-    default_vars = {
+    default_vars: Dict[str, Union[str, int, float]] = {
         'CURRENT_DATE': now.strftime('%Y-%m-%d'),
         'CURRENT_TIME': now.strftime('%H:%M'),
     }
     if context:
         default_vars.update(context)
-    def replace_var(match):
+        
+    def replace_var(match) -> str:
         var = match.group(1)
         return str(default_vars.get(var, '{{' + var + '}}'))
+        
     return re.sub(r'\{\{([A-Z0-9_]+)\}\}', replace_var, prompt)
 
-def select_prompts(context: Dict[str, str]):
-    paths = [
-        'data/prompts/azom_iexpertpro_v3.md'
+async def select_prompts(context: Dict[str, Any]) -> List[Path]:
+    """
+    Väljer lämpliga promptfiler baserat på context.
+    
+    Args:
+        context: Dictionary med context-information
+        
+    Returns:
+        Lista med Path-objekt till promptfiler
+    """
+    base_dir = Path('data/prompts')
+    paths: List[Path] = [
+        base_dir / 'azom_iexpertpro_v3.md'
     ]
+    
     if context.get('safety_flag'):
-        paths.append('data/prompts/azom_safetyfilter_v1.md')
+        paths.append(base_dir / 'azom_safetyfilter_v1.md')
+        
     if context.get('session_memory'):
-        paths.append('data/prompts/azom_memoryinject_v1.md')
+        paths.append(base_dir / 'azom_memoryinject_v1.md')
+        
     return paths
 
-def compose_full_prompt(user_prompt: str, context: Dict[str, str]):
-    texts = []
-    for path in select_prompts(context):
+async def compose_full_prompt(user_prompt: str, context: Dict[str, Any]) -> str:
+    """
+    Sammanställer en komplett prompt med system- och användarprompt.
+    
+    Args:
+        user_prompt: Användarens fråga eller direktiv
+        context: Dictionary med context-information
+        
+    Returns:
+        Komplett prompt för LLM
+    """
+    texts: List[str] = []
+    prompt_paths = await select_prompts(context)
+    
+    for path in prompt_paths:
         try:
-            with open(path, encoding='utf-8') as f:
-                texts.append(inject_prompt_vars(f.read(), context))
+            # Asynkron filöppning för att minimera blockering av event-loop
+            async with aiofiles.open(path, mode='r', encoding='utf-8') as f:
+                content = await f.read()
+                texts.append(await inject_prompt_vars(content, context))
         except FileNotFoundError:
             # Skip missing prompt file in test/dev environments
             continue
@@ -38,6 +80,8 @@ def compose_full_prompt(user_prompt: str, context: Dict[str, str]):
     # Fallback defaults if no prompt files were found
     if not texts:
         texts.append("AZOM Systemprompt: Du är en hjälpsam AI-assistent från AZOM.")
+        
     if context.get('safety_flag') and not any('säkerhet' in t.lower() or 'restriktiv' in t.lower() for t in texts):
         texts.append("Säkerhetsfilter: Var restriktiv och fokusera på säkerhet.")
+        
     return '\n\n'.join(texts) + '\n\n' + user_prompt
