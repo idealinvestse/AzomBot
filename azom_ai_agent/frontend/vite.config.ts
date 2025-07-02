@@ -22,10 +22,6 @@ export default defineConfig({
         target: "http://localhost:8001",
         changeOrigin: true,
       },
-      "/admin": {
-        target: "http://localhost:8001",
-        changeOrigin: true,
-      },
       "/ping": {
         target: "http://localhost:8008",
         changeOrigin: true,

@@ -12,10 +12,7 @@ from .pipelines.azom_installation_pipeline import AZOMInstallationPipeline
 from .pipelines.support_pipeline import SupportPipeline
 from .services.llm_client import LLMClient
 from .services.rag_service import RAGService
-from .admin.products_api import router as products_admin_router
-from .admin.faq_api import router as faq_admin_router
-from .admin.troubleshooting_api import router as troubleshooting_admin_router
-from .admin.llm_api import router as llm_admin_router
+
 
 init_logging()  # root logging
 logger = get_logger(__name__)
@@ -25,10 +22,7 @@ app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 # Add middleware & exception handlers
 app.add_middleware(RequestLoggingMiddleware)
 add_exception_handlers(app)
-app.include_router(products_admin_router, prefix="/admin", tags=["admin-products"])
-app.include_router(faq_admin_router, prefix="/admin", tags=["admin-faq"])
-app.include_router(troubleshooting_admin_router, prefix="/admin", tags=["admin-troubleshooting"])
-app.include_router(llm_admin_router, prefix="/admin", tags=["admin-llm"])
+
 
 # CORS
 app.add_middleware(
