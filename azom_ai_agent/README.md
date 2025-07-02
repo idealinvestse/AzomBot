@@ -68,7 +68,7 @@ curl -X POST http://localhost:8001/chat/azom \
 
 ### Prerequisites  
 * Python 3.12  
-* Node 18+ (frontend)  
+* Node 18+ / LTS (20) recommended (frontend)  
 * Docker (optional for containerised run)
 
 ### 1. Clone & setup Python
@@ -80,12 +80,23 @@ pip install -r requirements.txt
 ```
 
 ### 2. Environment
-Copy `.env.example` → `.env` and adjust keys, ports and tokens.
+Copy `.env.example` → `.env` and adjust keys, ports and tokens. Viktiga variabler:
 
-Install extra RAG dependencies:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENWEBUI_API_URL` | `http://localhost:3000/api` | Base-URL till OpenWebUI/Ollama |
+| `OPENWEBUI_API_KEY` | (empty) | Token om instansen är säkrad |
+| `DATABASE_URL` | `sqlite:///./azom.db` | SQL-alchemy connection |
+| `PROJECT_NAME` | `AZOM AI Agent` | Visas i OpenAPI |
+| `LOG_LEVEL` | `INFO` | Root log level |
+| `CORE_API_PORT` | `8000` | Port för core-api |
+| `PIPELINE_API_PORT` | `8001` | Port för pipeline-server |
+
+Extra RAG-beroenden:
 ```bash
-pip install sentence-transformers faiss-cpu
+pip install sentence-transformers faiss-cpu   # faiss-gpu om du har CUDA
 ```
+Första starten kan ta ~30s när embeddings indexeras.
 
 ### 3. Start backend
 ```bash
@@ -96,21 +107,59 @@ uvicorn app.pipelineserver.pipeline_app.main:app --port 8001 --reload
 ```bash
 cd azom_ai_agent/frontend
 npm install
-npm run dev   # http://localhost:5173
+npm run dev         # http://localhost:5173 (dev proxy → 8001)
+
+# Production build
+npm run build       # Build to dist/
+npm run preview     # Local preview på http://localhost:4173
 ```
 
 ### 5. Docker-compose (all-in-one)
 ```bash
 docker compose up --build -d
 ```
+Komponenter som startas:
+* core-api (port 8000)
+* pipeline-server (8001)
+* frontend Vite preview (5173)
+* valfri Postgres (5432) – aktivera i `docker/docker-compose.yml` via env-flag.
 
 ## Development
 
-Refer to `coding-guidelines.md` for code standards. The full system specification is located in `docs/SystemSpecification.md`. Use `ruff`, `mypy --strict`, and Vitest/Pytest for test coverage (>80 %).
+Refer to `coding-guidelines.md` för kodstandard. Viktiga kommandon:
+```bash
+ruff format .
+ruff check .
+mypy --strict
+```
+Kör DB-migrationer (om Postgres):
+```bash
+alembic upgrade head
+```
 
 ## Testing
 
-Automated testing for all functions and endpoints is implemented. For more information on running tests, see the test documentation in the respective directories.
+### Backend
+```bash
+pytest -q               # snabb
+pytest --cov            # coverage-rapport
+```
+### Frontend
+```bash
+npm run test            # Vitest
+```
+Install pre-commit hooks:
+```bash
+pre-commit install
+```
+Hooks kör `ruff`, `mypy --strict`, format och tester.
+
+## Contributing
+
+1. Skapa `feature/<kort-beskrivning>`-branch.
+2. Följ Conventional Commits (`feat:`, `fix:` …).
+3. Öka test-coverage om du ändrar logik.
+4. Öppna PR mot `main` – en review krävs.
 
 ## License
 
