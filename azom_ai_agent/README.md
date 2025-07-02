@@ -5,10 +5,11 @@
 ## Key Features
 
 - **FastAPI Server**: Provides robust API endpoints for health checks, pipeline processing, and administrative tasks.
-- **Pipeline Processing**: Includes orchestration, RAG (Retrieval-Augmented Generation), knowledge, memory, and safety services for comprehensive installation guidance.
+- **Pipeline Processing**: Includes orchestration, RAG- **Vector-store RAG (FAISS + MiniLM)** for context retrieval.
+- **Knowledge, memory, and safety services** for full-stack installation guidance.
 - **Frontend UI**: Modern React 18 + TypeScript + Vite dashboard with Tailwind CSS and shadcn/ui components.
 - **Swedish NLP**: Custom utilities for processing Swedish language inputs to extract relevant information like car models.
-- **OpenWebUI / Ollama Integration**: Seamless local-LM experience with optional Groq fallback.
+- **OpenWebUI / Ollama Integration** with `/chat/azom` endpoint and optional Groq fallback.
 
 ## Project Structure
 
@@ -37,7 +38,7 @@ This repository contains two FastAPI applications:
 | Service | Module | Purpose | Default Port |
 |---------|--------|---------|--------------|
 | **Core API** | `app.main:app` | Public endpoints for health-checks, diagnosis and knowledge management | **8000** |
-| **Pipeline Server** | `app.pipelineserver.pipeline_app.main:app` | Installation & support pipelines plus admin endpoints | **8001** |
+| **Pipeline Server** | `app.pipelineserver.pipeline_app.main:app` | Installation, RAG chat & admin endpoints | **8001** |
 
 Run them locally in separate shells (or via Docker-compose):
 
@@ -46,8 +47,7 @@ Run them locally in separate shells (or via Docker-compose):
 uvicorn app.main:app --reload            # http://localhost:8000
 
 # Pipeline server
-uvicorn app.pipelineserver.pipeline_app.main:app \
-        --port 8001 --reload             # http://localhost:8001
+uvicorn app.pipelineserver.pipeline_app.main:app --port 8001 --reload   # http://localhost:8001
 ```
 
 Example requests:
@@ -57,6 +57,11 @@ curl http://localhost:8000/ping
 curl -X POST http://localhost:8001/pipeline/install \
      -H "Content-Type: application/json" \
      -d '{"user_input":"Install antenna","car_model":"Volvo XC60"}'
+
+# Chat endpoint
+curl -X POST http://localhost:8001/chat/azom \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Hur installerar jag AZOM?", "car_model": "Volvo"}'
 ```
 
 ## Quickstart
@@ -77,9 +82,14 @@ pip install -r requirements.txt
 ### 2. Environment
 Copy `.env.example` → `.env` and adjust keys, ports and tokens.
 
+Install extra RAG dependencies:
+```bash
+pip install sentence-transformers faiss-cpu
+```
+
 ### 3. Start backend
 ```bash
-uvicorn app.pipelineserver.pipeline_app.main:app --port 8008 --reload
+uvicorn app.pipelineserver.pipeline_app.main:app --port 8001 --reload
 ```
 
 ### 4. Start frontend
