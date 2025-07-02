@@ -13,5 +13,19 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
-  },
+    proxy: {
+      "/tool": {
+        target: "http://localhost:8008",
+        changeOrigin: true,
+      },
+      "/admin": {
+        target: "http://localhost:8008",
+        changeOrigin: true,
+      },
+      "/ping": {
+        target: "http://localhost:8008",
+        changeOrigin: true,
+      },
+    },
+  }
 });
