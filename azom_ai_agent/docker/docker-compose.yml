@@ -1,0 +1,31 @@
+version: '3.9'
+services:
+  core_api:
+    build:
+      context: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8008
+    env_file: .env
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
+  pipeline_server:
+    build:
+      context: .
+    command: uvicorn app.pipelineserver.pipeline_app.main:app --host 0.0.0.0 --port 8001
+    env_file: .env
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      retries: 3
+    restart: unless-stopped

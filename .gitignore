@@ -1,0 +1,29 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment files
+.env
+.venv
+venv/
+env/
+
+# Log files
+*.log
+
+# Editor files
+*.swp
+*.bak
+~$
+
+# Test cache
+.pytest_cache/
+
+# Data files
+*.csv
+*.json
+
+# Documentation files
+*.md

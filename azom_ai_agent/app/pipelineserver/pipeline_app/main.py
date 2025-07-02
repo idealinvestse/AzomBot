@@ -1,0 +1,108 @@
+from app.logger import get_logger, init_logging
+from fastapi import FastAPI, Request, HTTPException, Response, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from app.middleware import RequestLoggingMiddleware
+from app.exceptions import add_exception_handlers
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from .config import settings
+from .database import get_db
+from .pipelines.azom_installation_pipeline import AZOMInstallationPipeline
+from .pipelines.support_pipeline import SupportPipeline
+from .admin.products_api import router as products_admin_router
+from .admin.faq_api import router as faq_admin_router
+from .admin.troubleshooting_api import router as troubleshooting_admin_router
+from .admin.llm_api import router as llm_admin_router
+
+init_logging()  # root logging
+logger = get_logger(__name__)
+
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
+
+# Add middleware & exception handlers
+app.add_middleware(RequestLoggingMiddleware)
+add_exception_handlers(app)
+app.include_router(products_admin_router, prefix="/admin", tags=["admin-products"])
+app.include_router(faq_admin_router, prefix="/admin", tags=["admin-faq"])
+app.include_router(troubleshooting_admin_router, prefix="/admin", tags=["admin-troubleshooting"])
+app.include_router(llm_admin_router, prefix="/admin", tags=["admin-llm"])
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+pipeline = AZOMInstallationPipeline()
+support_pipeline = SupportPipeline()
+
+class PipelineInstallRequest(BaseModel):
+    user_input: str
+    car_model: str = None
+    user_experience: str = None
+
+class SupportRequest(BaseModel):
+    question: str
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+@app.post("/pipeline/install")
+async def install_pipeline(request: PipelineInstallRequest):
+    """ Kör installations-pipelinen och returnerar rekommendationer. """
+    try:
+        # Validera indata
+        if not request.user_input or not request.user_input.strip():
+            raise HTTPException(status_code=400, detail="Ange en beskrivning av ditt ärende")
+            
+        if not request.car_model or not request.car_model.strip():
+            raise HTTPException(status_code=400, detail="Ange bilmodell")
+            
+        # Kör pipelinen
+        result = await pipeline.run_installation(
+            user_input=request.user_input,
+            car_model=request.car_model,
+            user_experience=request.user_experience or "nybörjare"
+        )
+        return {"result": result}
+        
+    except HTTPException:
+        # Skicka vidare HTTP-undantag oförändrade
+        raise
+        
+    except ValueError as e:
+        # Hantera valideringsfel med 400 Bad Request
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    except Exception as e:
+        # Logga oväntade fel och returnera 500
+        logger.exception("Oväntat fel i installationspipelinen")
+        raise HTTPException(
+            status_code=500, 
+            detail="Ett internt fel inträffade. Vänligen försök igen senare."
+        )
+
+@app.post("/api/v1/support")
+async def get_support(request: SupportRequest):
+    """Get support for a specific question."""
+    try:
+        if not request.question or not request.question.strip():
+            raise HTTPException(status_code=422, detail="Question is required")
+            
+        # Get support response
+        result = await support_pipeline.run_support(request.question)
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error in support endpoint")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while processing your request"
+        )
