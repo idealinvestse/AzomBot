@@ -3,7 +3,11 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
-from azom_ai_agent.app.pipelineserver.pipeline_app.main import app, llm_client
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from app.pipelineserver.pipeline_app.main import app, llm_client
 
 
 @pytest.fixture(autouse=True)

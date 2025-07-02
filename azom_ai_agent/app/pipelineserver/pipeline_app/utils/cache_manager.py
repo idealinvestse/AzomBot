@@ -10,3 +10,7 @@ class CacheManager:
 
     def set_cache(self, key, value):
         self._cache[key] = value
+
+    def clear_all(self):
+        """Clear all cache entries."""
+        self._cache.clear()

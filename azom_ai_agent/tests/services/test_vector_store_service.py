@@ -2,9 +2,12 @@ import json
 from pathlib import Path
 
 import pytest
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 # Adjust import path if project structure changes
-from azom_ai_agent.app.pipelineserver.pipeline_app.services.vector_store_service import (
+from app.pipelineserver.pipeline_app.services.vector_store_service import (
     VectorStoreService,
 )
 

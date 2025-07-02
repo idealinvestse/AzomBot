@@ -3,7 +3,9 @@ import json
 import requests
 
 class GroqService:
-    def __init__(self, api_key=None, api_url=None, model=None):
+    def __init__(self, api_key: str = None, api_url: str = None, model: str = None):
+        if not api_key:
+            raise ValueError("API key cannot be empty")
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
         self.api_url = api_url or os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
 
@@ -21,10 +23,9 @@ class GroqService:
                 # Ignorera fel och använd tidigare modell
                 pass
 
-        if not self.api_key:
-            raise ValueError("GROQ_API_KEY is required")
-
-    def chat(self, messages, temperature=0.3, max_tokens=1024, model: str | None = None):
+    def chat(self, messages: list, temperature: float = 0.3, max_tokens: int = 1024, model: str | None = None):
+        if not messages:
+            raise ValueError("Messages cannot be empty")
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

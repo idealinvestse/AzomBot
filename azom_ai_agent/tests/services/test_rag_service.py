@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 import pytest
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from azom_ai_agent.app.pipelineserver.pipeline_app.services.rag_service import RAGService
+from app.pipelineserver.pipeline_app.services.rag_service import RAGService
 
 
 @pytest.mark.asyncio

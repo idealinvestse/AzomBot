@@ -17,6 +17,8 @@ class AIService:
             self.model = model
 
     def query(self, user_prompt: str, context=None) -> str:
+        if not user_prompt:
+            raise ValueError("Prompt cannot be empty")
         context = context or {}  # t.ex. {"USER_NAME": ..., "safety_flag": ..., "session_memory": ..., ...}
         full_prompt = compose_full_prompt(user_prompt, context)
         headers = {"Authorization": f"Bearer {self.token}"}
