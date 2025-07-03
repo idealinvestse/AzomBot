@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Bot, Loader2, AlertCircle, User } from "lucide-react";
+import { postChatMessage } from "@/services/api";
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,14 +36,12 @@ interface Message {
 }
 
 interface ChatPageProps {
-  apiEndpoint?: string;
   placeholder?: string;
   title?: string;
   className?: string;
 }
 
 const ChatPage: React.FC<ChatPageProps> = ({
-  apiEndpoint = "/api/v1/chat",
   placeholder = "Fråga AZOM AI om allt som rör billjud...",
   title = "AZOM AI Chattassistent",
   className,
@@ -88,21 +87,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_input: currentInput,
-          session_id: sessionId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Kunde inte få svar från AI-assistenten.');
-      }
-
-      const data = await response.json();
+      const data = await postChatMessage({ user_input: currentInput, session_id: sessionId ?? undefined });
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),

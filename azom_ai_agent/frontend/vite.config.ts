@@ -14,21 +14,11 @@ export default defineConfig({
     port: 5173,
     open: true,
     proxy: {
-      "/chat": {
-        target: "http://localhost:8001",
-        changeOrigin: true,
-      },
-      "/pipeline": {
-        target: "http://localhost:8001",
-        changeOrigin: true,
-      },
-      "/ping": {
-        target: "http://localhost:8008",
-        changeOrigin: true,
-      },
       "/api": {
-        target: "http://localhost:8008",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api\/v1\//, ''),
       },
     },
   }

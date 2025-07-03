@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, Zap, Clock, BarChart2, ServerCrash, LucideIcon } from "lucide-react";
-import { fetchSystemStats, SystemStats, KpiCardData } from '@/services/apiService';
+import { fetchSystemStats, SystemStats, KpiCardData } from '@/services/api';
 import Spinner from '@/components/ui/spinner';
 
 const iconMap: Record<KpiCardData['iconName'], LucideIcon> = {
@@ -100,7 +100,7 @@ export default function StatsPage() {
         <CardContent>
           <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.dailyRequests}>
+              <BarChart data={stats.apiCalls}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
