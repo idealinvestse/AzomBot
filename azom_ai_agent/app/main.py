@@ -1,8 +1,12 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from .config import Settings
+from .config import Settings, FrontendSettings, update_runtime_settings, get_current_config
 from .logger import get_logger, init_logging
-from .api.v1 import diagnose, health, knowledge_management
+from app.api.v1.health import router as health_router
+from app.api.v1.diagnose import router as diagnose_router
+from app.api.v1.knowledge_management import router as knowledge_router
+from app.api.v1.chat import router as chat_router
+from fastapi import Response, status, Depends
 import uvicorn
 from .middlewares import RequestLoggingMiddleware, RateLimitingMiddleware
 from .exceptions import add_exception_handlers
@@ -11,7 +15,7 @@ from .exceptions import add_exception_handlers
 settings = Settings()
 
 # Initialisera loggning för hela applikationen
-init_logging(level="DEBUG" if settings.DEBUG else str(settings.LOG_LEVEL.value))
+init_logging(level=settings.LOG_LEVEL.value)
 logger = get_logger(__name__)
 
 # Skapa FastAPI-applikation med metadata från settings
@@ -26,9 +30,18 @@ app = FastAPI(
 )
 
 # Registrera API-routes
-app.include_router(diagnose.router)
-app.include_router(health.router)
-app.include_router(knowledge_management.router)
+app.include_router(health_router)
+app.include_router(diagnose_router)
+app.include_router(knowledge_router)
+app.include_router(chat_router)
+
+@app.post("/api/v1/settings", status_code=status.HTTP_204_NO_CONTENT)
+def configure_runtime_settings(frontend_settings: FrontendSettings):
+    """
+    Endpoint to update runtime settings from the frontend.
+    """
+    update_runtime_settings(frontend_settings)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # Lägg till CORS-middleware om konfigurerad
 if settings.CORS_ORIGINS:

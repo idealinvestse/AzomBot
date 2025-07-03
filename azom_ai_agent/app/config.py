@@ -9,6 +9,7 @@ import os
 from enum import Enum
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
 
 
@@ -20,6 +21,19 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
 
+
+class FrontendSettings(BaseModel):
+    """Defines the structure of settings coming from the frontend."""
+    llm_backend: str = Field(alias='llmBackend')
+    openwebui_url: Optional[str] = Field(None, alias='openwebuiUrl')
+    openwebui_api_token: Optional[str] = Field(None, alias='openwebuiApiToken')
+    groq_api_key: Optional[str] = Field(None, alias='groqApiKey')
+    target_model: str = Field(alias='targetModel')
+
+    model_config = SettingsConfigDict(
+        populate_by_name=True,  # Allows using alias for population
+        extra="ignore"
+    )
 
 class Settings(BaseSettings):
     """Huvudkonfiguration för AZOM AI Agent.
@@ -49,7 +63,9 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8008
     OPENWEBUI_URL: str = "http://192.168.50.164:3000"
-    OPENWEBUI_API_TOKEN: str = "sk-34c40884f61b46fd824629f88cfbf1f0"  # Default för tests/utv
+    OPENWEBUI_API_TOKEN: Optional[str] = "sk-34c40884f61b46fd824629f88cfbf1f0"  # Default för tests/utv
+    GROQ_API_KEY: Optional[str] = None
+    LLM_BACKEND: str = "openwebui"
     TARGET_MODEL: str = "azom-se-general"
     DATA_PATH: Path = Path("data")
     KNOWLEDGE_CACHE_TTL: int = 3600
@@ -86,5 +102,38 @@ class Settings(BaseSettings):
         Returns:
             Dictionary med alla konfigurationsvärden
         """
-        return {k: v for k, v in self.__dict__.items() 
-                if not k.startswith('_') and k != 'model_config'}
+        return self.model_dump()
+
+# --- Dynamic Settings Management ---
+
+# Initialize settings from file/env
+_initial_settings = Settings()
+# Create a mutable dictionary for runtime settings
+_current_settings: Dict[str, Any] = _initial_settings.model_dump()
+
+def update_runtime_settings(new_settings: FrontendSettings):
+    """Updates the runtime configuration from frontend settings."""
+    global _current_settings
+    
+    update_data = new_settings.model_dump(by_alias=False)  # get snake_case keys
+    
+    mapping = {
+        'llm_backend': 'LLM_BACKEND',
+        'openwebui_url': 'OPENWEBUI_URL',
+        'openwebui_api_token': 'OPENWEBUI_API_TOKEN',
+        'groq_api_key': 'GROQ_API_KEY',
+        'target_model': 'TARGET_MODEL',
+    }
+    
+    updates_applied = {}
+    for frontend_key, backend_key in mapping.items():
+        if frontend_key in update_data and update_data[frontend_key] is not None:
+            _current_settings[backend_key] = update_data[frontend_key]
+            updates_applied[backend_key] = update_data[frontend_key]
+
+    if updates_applied:
+        print(f"Runtime settings updated: {updates_applied}")
+
+def get_current_config() -> Dict[str, Any]:
+    """FastAPI dependency to get the current runtime configuration."""
+    return _current_settings
