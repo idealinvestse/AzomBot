@@ -55,7 +55,7 @@ if settings.CORS_ORIGINS:
 
 # Lägg till custom middleware för loggning och rate-limiting
 app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(RateLimitingMiddleware, settings=settings)
+app.add_middleware(RateLimitingMiddleware)
 
 # Konfigurera globala exception handlers
 add_exception_handlers(app)

@@ -10,7 +10,7 @@ from .config import settings
 from .database import get_db
 from .pipelines.azom_installation_pipeline import AZOMInstallationPipeline
 from .pipelines.support_pipeline import SupportPipeline
-from .services.llm_client import LLMClient
+from .services.llm_client import get_llm_client, LLMServiceProtocol
 from .services.rag_service import RAGService
 
 
@@ -36,7 +36,7 @@ app.add_middleware(
 pipeline = AZOMInstallationPipeline()
 support_pipeline = SupportPipeline()
 rag_service = RAGService()
-llm_client = LLMClient()
+
 
 class PipelineInstallRequest(BaseModel):
     user_input: str
@@ -90,7 +90,7 @@ async def install_pipeline(request: PipelineInstallRequest):
         )
 
 @app.post("/chat/azom")
-async def chat_with_azom(request: ChatRequest):
+async def chat_with_azom(request: ChatRequest, llm_client: LLMServiceProtocol = Depends(get_llm_client)):
     """Free-form chat endpoint that augments user query with RAG context and calls local OpenWebUI/Ollama via LLMClient."""
     if not request.message or not request.message.strip():
         raise HTTPException(status_code=422, detail="Message is required")

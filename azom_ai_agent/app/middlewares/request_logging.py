@@ -90,6 +90,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         # Beräkna hanteringstid och logga svaret
         process_time = (time.perf_counter() - start_time) * 1000
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Process-Time"] = f"{process_time:.2f}ms"
+
         log_method = (
             self.logger.warning if response.status_code >= 400 else self.logger.info
         )
@@ -104,12 +107,5 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "duration_ms": f"{process_time:.2f}",
             },
         )
-        
-        # Lägg till korrelations-ID i svarshuvuden för klientreferens
-        response.headers["X-Correlation-ID"] = correlation_id
-        
-        # Lägg till laddningstid i svarshuvuden för prestandaövervakning i utvecklingsläge
-        if hasattr(request.app, "debug") and request.app.debug:
-            response.headers["X-Process-Time"] = f"{process_time:.2f}ms"
-            
+
         return response

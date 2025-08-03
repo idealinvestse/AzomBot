@@ -1,13 +1,21 @@
 from typing import Dict, Any
 from app.prompt_utils import compose_full_prompt
-from app.pipelineserver.pipeline_app.services.llm_client import LLMServiceProtocol
+from app.services.protocols import LLMClientProtocol
 from fastapi import Depends, HTTPException, status
 
 class AIService:
     """Service layer for handling AI-related business logic."""
 
-    def __init__(self, llm_client: LLMServiceProtocol):
+    def __init__(self, llm_client: LLMClientProtocol):
         self.llm_client = llm_client
+
+    def update_config(self, **kwargs: Any) -> None:
+        """Placeholder for dynamic configuration updates."""
+        # This service is a facade, so config is handled by the underlying client.
+        if hasattr(self.llm_client, 'update_config') and callable(getattr(self.llm_client, 'update_config')):
+            self.llm_client.update_config(**kwargs)
+
+
 
     async def query(self, user_prompt: str, context: Dict[str, Any] | None = None) -> str:
         """Processes a user query by composing a full prompt and querying the LLM."""

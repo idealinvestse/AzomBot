@@ -1,24 +1,35 @@
 import pytest
-
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
 from app.pipelineserver.pipeline_app.utils.swedish_nlp import SwedishNLP
 
 
-def test_swedish_nlp_initialization():
+@pytest.mark.asyncio
+async def test_swedish_nlp_initialization():
     """Test SwedishNLP initialization."""
     nlp = SwedishNLP()
     assert nlp is not None
 
-# Placeholder for additional tests if methods are added or confirmed in source
-# Example test for a potential method, will be skipped if method doesn't exist
-def test_swedish_nlp_process_text():
-    """Test processing text with SwedishNLP, if method exists."""
+
+@pytest.mark.asyncio
+async def test_extract_car_entities():
+    """Test the extract_car_entities method."""
     nlp = SwedishNLP()
-    try:
-        result = nlp.process_text("Hej, hur mår du?")
-        assert result is not None
-    except AttributeError:
-        pytest.skip("process_text method not found in SwedishNLP")
+
+    # Test case where the entity is found
+    text_with_volvo = "Jag kör en Volvo V90."
+    entities = await nlp.extract_car_entities(text_with_volvo)
+    assert entities == ["Volvo"]
+
+    # Test case with different casing
+    text_with_volvo_upper = "Min bil är en VOLVO."
+    entities_upper = await nlp.extract_car_entities(text_with_volvo_upper)
+    assert entities_upper == ["Volvo"]
+
+    # Test case where the entity is not found
+    text_without_volvo = "Jag har en Saab."
+    no_entities = await nlp.extract_car_entities(text_without_volvo)
+    assert no_entities == []

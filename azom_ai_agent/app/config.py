@@ -74,7 +74,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: LogLevel = LogLevel.INFO
     LOG_FORMAT: str = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     MAX_REQUEST_SIZE_MB: int = 10
-    RATE_LIMIT_REQUESTS: int = 100  # Per timme per IP
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 3600  # 1 hour
     CORS_ORIGINS: List[str] = ["*"]
     
     # Pydantic-konfiguration

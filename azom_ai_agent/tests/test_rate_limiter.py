@@ -1,210 +1,94 @@
-"""
-Test suite för RateLimitingMiddleware.
-
-Detta testmodulen testar funktionaliteten för rate-limiting middleware
-med fokus på olika tidsfönster, IP-baserad begränsning och felhantering.
-"""
-import asyncio
-import time
-from datetime import datetime
 import pytest
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import BaseModel
+from starlette.responses import JSONResponse
 
-from app.middlewares.rate_limiter import RateLimitingMiddleware, RateLimiter
+from app.middlewares.rate_limiter import RateLimitingMiddleware
 from app.config import Settings
 
-
-class MockSettings(BaseModel):
-    """Mock-inställningar för tester."""
-    RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_REQUESTS_PER_WINDOW: int = 5
-    RATE_LIMIT_WINDOW_SECONDS: int = 10
-    DEBUG: bool = True
-
+# --- Fixtures ---
 
 @pytest.fixture
-def settings():
-    """Fixture för att skapa mock-inställningar."""
-    return MockSettings()
-
-
-@pytest.fixture
-def rate_limiter():
-    """Fixture för att skapa en isolerad RateLimiter för testning."""
-    return RateLimiter(max_requests=5, window_seconds=10)
-
+def mock_settings_enabled():
+    """Provides settings with rate limiting enabled."""
+    settings = Settings()
+    settings.RATE_LIMIT_ENABLED = True
+    settings.RATE_LIMIT_REQUESTS = 5
+    settings.RATE_LIMIT_WINDOW_SECONDS = 10
+    return settings
 
 @pytest.fixture
-def app(settings):
-    """Fixture för att skapa en testapp med rate-limiter middleware."""
-    app = FastAPI()
-    app.add_middleware(RateLimitingMiddleware, settings=settings)
+def app(mock_settings_enabled):
+    """Creates a FastAPI app instance with the rate limiting middleware."""
+    test_app = FastAPI()
+    test_app.state.settings = mock_settings_enabled
+    test_app.add_middleware(RateLimitingMiddleware)
 
-    @app.get("/test")
-    async def test_endpoint():
-        return {"message": "success"}
+    @test_app.get("/test")
+    async def test_endpoint(request: Request):
+        client_ip = request.client.host if request.client else "testclient"
+        return JSONResponse({"message": "success", "client_ip": client_ip})
 
-    @app.get("/unlimited")
-    async def unlimited_endpoint():
-        # Den här funktionen kommer att användas för att testa undantag
-        return {"message": "unlimited access"}
-
-    return app
-
+    return test_app
 
 @pytest.fixture
 def client(app):
-    """Fixture för att skapa en TestClient för FastAPI."""
-    return TestClient(app)
+    """Provides a TestClient for making requests to the app."""
+    with TestClient(app, base_url="http://testserver") as test_client:
+        yield test_client
 
+# --- Middleware Integration Tests (Refactored) ---
 
-def test_rate_limiter_init(rate_limiter):
-    """Test att RateLimiter initieras korrekt."""
-    assert rate_limiter.max_requests == 5
-    assert rate_limiter.window_seconds == 10
-    assert isinstance(rate_limiter.request_counts, dict)
-
-
-def test_rate_limiter_add_request(rate_limiter):
-    """Test att add_request ökar räknare för en specifik IP."""
-    ip = "127.0.0.1"
-    
-    # Första begäran ska lyckas
-    assert rate_limiter.add_request(ip) is True
-    
-    # Verifiera att begäran registrerats
-    assert ip in rate_limiter.request_counts
-    assert len(rate_limiter.request_counts[ip]) == 1
-    
-    # Lägg till flera begäran under gränsen
-    for _ in range(3):
-        assert rate_limiter.add_request(ip) is True
-    
-    # Verifiera att alla begäran registrerats
-    assert len(rate_limiter.request_counts[ip]) == 4
-    
-    # Lägg till sista begäran inom gränsen
-    assert rate_limiter.add_request(ip) is True
-    
-    # Nästa begäran ska överskrida gränsen
-    assert rate_limiter.add_request(ip) is False
-
-
-def test_rate_limiter_cleanup(rate_limiter):
-    """Test att cleanup tar bort gamla begäran."""
-    ip = "192.168.1.1"
-    
-    # Lägg till några begäran med gamla timestamps
-    current_time = time.time()
-    rate_limiter.request_counts[ip] = [
-        current_time - 15,  # 15 sekunder gammal (över fönstret)
-        current_time - 5,   # 5 sekunder gammal (inom fönstret)
-        current_time        # Ny begäran
-    ]
-    
-    # Kör cleanup
-    rate_limiter.cleanup(ip)
-    
-    # Ska bara ha kvar de två nyaste begäran
-    assert len(rate_limiter.request_counts[ip]) == 2
-
-
-@pytest.mark.asyncio
-async def test_middleware_allows_requests_under_limit(client):
-    """Test att middleware tillåter begäran under gränsen."""
-    # Gör begäran under gränsen (5)
+def test_middleware_allows_requests_under_limit(client):
+    """The middleware should allow requests that are under the limit."""
+    headers = {"X-Forwarded-For": "1.1.1.1"}
     for i in range(5):
-        response = client.get("/test", headers={"X-Forwarded-For": "127.0.0.1"})
-        assert response.status_code == 200
-        assert response.json() == {"message": "success"}
+        response = client.get("/test", headers=headers)
+        assert response.status_code == 200, f"Request {i+1} failed"
 
-
-@pytest.mark.asyncio
-async def test_middleware_blocks_requests_over_limit(client):
-    """Test att middleware blockerar begäran över gränsen."""
-    # Gör begäran upp till gränsen
-    for i in range(5):
-        response = client.get("/test", headers={"X-Forwarded-For": "127.0.0.2"})
-        assert response.status_code == 200
-    
-    # Nästa begäran ska blockeras
-    response = client.get("/test", headers={"X-Forwarded-For": "127.0.0.2"})
-    assert response.status_code == 429
-    assert "Too many requests" in response.text
-
-
-@pytest.mark.asyncio
-async def test_rate_limiter_different_ips(client):
-    """Test att rate-limiter hanterar olika IP-adresser separat."""
-    # Gör max antal begäran från en IP
-    for i in range(5):
-        client.get("/test", headers={"X-Forwarded-For": "10.0.0.1"})
-    
-    # Denna begäran ska blockeras
-    response = client.get("/test", headers={"X-Forwarded-For": "10.0.0.1"})
-    assert response.status_code == 429
-    
-    # Men en annan IP ska fortfarande kunna göra begäran
-    response = client.get("/test", headers={"X-Forwarded-For": "10.0.0.2"})
-    assert response.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_middleware_disabled_setting(app):
-    """Test att middleware inte begränsar när inställningen är avstängd."""
-    # Skapa en ny app med inaktiverad rate-limiting
-    disabled_settings = MockSettings(RATE_LIMIT_ENABLED=False)
-    app.add_middleware(RateLimitingMiddleware, settings=disabled_settings)
-    
-    client = TestClient(app)
-    
-    # Gör fler begäran än gränsen
-    for i in range(10):  # Dubbla gränsen
-        response = client.get("/test", headers={"X-Forwarded-For": "127.0.0.3"})
-        assert response.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_get_client_ip():
-    """Test att extrahera klient-IP från olika headers."""
-    from app.middlewares.rate_limiter import get_client_ip
-    
-    # Test med X-Forwarded-For
-    request = Request({"type": "http", "headers": [(b"x-forwarded-for", b"192.168.1.1")]})
-    assert await get_client_ip(request) == "192.168.1.1"
-    
-    # Test med X-Real-IP
-    request = Request({"type": "http", "headers": [(b"x-real-ip", b"10.0.0.1")]})
-    assert await get_client_ip(request) == "10.0.0.1"
-    
-    # Test med client.host
-    request = Request({"type": "http", "client": ("127.0.0.1", 8000), "headers": []})
-    assert await get_client_ip(request) == "127.0.0.1"
-    
-    # Test med flera IP-adresser i X-Forwarded-For
-    request = Request({"type": "http", "headers": [(b"x-forwarded-for", b"192.168.1.1, 10.0.0.1")]})
-    assert await get_client_ip(request) == "192.168.1.1"
-
-
-@pytest.mark.asyncio
-async def test_window_expiration(rate_limiter):
-    """Test att begäran går igenom efter att tidsfönstret har gått ut."""
-    ip = "127.0.0.5"
-    
-    # Fyll upp med begäran
+def test_middleware_blocks_requests_over_limit(client):
+    """The middleware should block requests that exceed the limit and add Retry-After header."""
+    headers = {"X-Forwarded-For": "2.2.2.2"}
+    # Exhaust the limit
     for _ in range(5):
-        assert rate_limiter.add_request(ip) is True
-    
-    # Nästa begäran ska blockeras
-    assert rate_limiter.add_request(ip) is False
-    
-    # Simulera att tidsfönstret går ut genom att ändra timestamp på begäran
-    current_time = time.time()
-    rate_limiter.request_counts[ip] = [current_time - 11]  # 11 sekunder gammal (utanför fönstret)
-    
-    # Nu ska en ny begäran tillåtas
-    assert rate_limiter.add_request(ip) is True
+        response = client.get("/test", headers=headers)
+        assert response.status_code == 200
+
+    # The 6th request should be blocked
+    response = client.get("/test", headers=headers)
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) <= 10
+
+def test_middleware_handles_different_ips_independently(client):
+    """The middleware should track limits for different IPs separately."""
+    headers_ip1 = {"X-Forwarded-For": "3.3.3.3"}
+    headers_ip2 = {"X-Forwarded-For": "4.4.4.4"}
+
+    # Exhaust limit for IP 1
+    for _ in range(5):
+        assert client.get("/test", headers=headers_ip1).status_code == 200
+    assert client.get("/test", headers=headers_ip1).status_code == 429
+
+    # IP 2 should still be allowed
+    assert client.get("/test", headers=headers_ip2).status_code == 200
+
+def test_middleware_is_disabled_via_settings():
+    """The middleware should not block requests if disabled in settings."""
+    disabled_settings = Settings()
+    disabled_settings.RATE_LIMIT_ENABLED = False
+    disabled_settings.RATE_LIMIT_REQUESTS = 1  # Set a low limit to confirm it's ignored
+    disabled_settings.RATE_LIMIT_WINDOW_SECONDS = 10
+    app_disabled = FastAPI()
+    app_disabled.state.settings = disabled_settings
+    app_disabled.add_middleware(RateLimitingMiddleware)
+
+    @app_disabled.get("/test")
+    async def test_endpoint(request: Request):
+        return JSONResponse({"message": "success"})
+
+    with TestClient(app_disabled) as client_disabled:
+        # Make more requests than the limit, should not be blocked
+        for _ in range(5):
+            response = client_disabled.get("/test")
+            assert response.status_code == 200

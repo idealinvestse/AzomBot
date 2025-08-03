@@ -74,7 +74,7 @@ class RAGService:
         for item in self.other_data:
             # Support/FAQ
             if 'question' in item and 'answer' in item:
-                if item['question'] and item['question'].lower() in query_lower:
+                if item['question'] and query_lower in item['question'].lower():
                     results.append({"title": f"FAQ: {item['question']}", "content": item['answer']})
             # Felsökning/guider
             elif 'steps' in item:

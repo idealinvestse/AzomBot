@@ -4,14 +4,19 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 from app.pipelineserver.pipeline_app.main import app
 
-client = TestClient(app)
 
-def test_health_check():
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_health_check(client):
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "healthy"
 
-def test_install_pipeline_groq():
+def test_install_pipeline_groq(client):
     # This will hit the full pipeline using the Groq backend as per .env
     payload = {
         "user_input": "Hur installerar jag DLR på Volvo XC60?",
@@ -24,7 +29,7 @@ def test_install_pipeline_groq():
     assert "installation_steps" in result
     assert isinstance(result["installation_steps"], list)
 
-def test_support_pipeline_groq():
+def test_support_pipeline_groq(client):
     payload = {"question": "Hur fungerar DLR produkten?"}
     resp = client.post("/api/v1/support", json=payload)
     assert resp.status_code == 200

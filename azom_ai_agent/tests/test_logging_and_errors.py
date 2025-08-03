@@ -33,29 +33,29 @@ def _create_test_app() -> FastAPI:
 
 
 def test_correlation_id_header_and_format():
-    client = TestClient(_create_test_app(), raise_server_exceptions=False)
-    resp = client.get("/ok")
-    assert resp.status_code == 200
-    correlation_id = resp.headers.get("X-Correlation-ID")
-    assert correlation_id, "Header saknas"
-    assert UUID_REGEX.match(correlation_id), "Headern är inte giltig UUID"
+    with TestClient(_create_test_app(), raise_server_exceptions=False) as client:
+        resp = client.get("/ok")
+        assert resp.status_code == 200
+        correlation_id = resp.headers.get("X-Correlation-ID")
+        assert correlation_id, "Header saknas"
+        assert UUID_REGEX.match(correlation_id), "Headern är inte giltig UUID"
 
 
 def test_app_exception_returns_json_and_status():
-    client = TestClient(_create_test_app(), raise_server_exceptions=False)
-    resp = client.get("/raise-app")
-    assert resp.status_code == 404  # mapped via NotFoundException
-    body = resp.json()
-    assert body["error"] == "Inte hittad"
-    assert "correlation_id" in body
-    # Correlation id should be valid UUID as well
-    assert UUID_REGEX.match(body["correlation_id"])
+    with TestClient(_create_test_app(), raise_server_exceptions=False) as client:
+        resp = client.get("/raise-app")
+        assert resp.status_code == 404  # mapped via NotFoundException
+        body = resp.json()
+        assert body["error"] == "Inte hittad"
+        assert "correlation_id" in body
+        # Correlation id should be valid UUID as well
+        assert UUID_REGEX.match(body["correlation_id"])
 
 
 def test_unhandled_exception_translated_to_500():
-    client = TestClient(_create_test_app(), raise_server_exceptions=False)
-    resp = client.get("/raise-unhandled")
-    assert resp.status_code == 500
-    body = resp.json()
-    assert body["error"] == "Internal server error"
-    assert "correlation_id" in body
+    with TestClient(_create_test_app(), raise_server_exceptions=False) as client:
+        resp = client.get("/raise-unhandled")
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["error"] == "Internal server error"
+        assert "correlation_id" in body

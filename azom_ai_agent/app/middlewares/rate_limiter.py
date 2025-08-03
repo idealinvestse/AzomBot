@@ -78,16 +78,16 @@ class RateLimiter:
 class RateLimitingMiddleware(BaseHTTPMiddleware):
     """Middleware som tillämpar rate-limiting per IP."""
     
-    def __init__(self, app: ASGIApp, settings: Settings):
+    def __init__(self, app: ASGIApp):
         """
         Initialisera middleware.
         
         Args:
             app: ASGI-applikation
-            settings: Konfiguration med rate-limit-inställningar
         """
         super().__init__(app)
-        self.rate_limiter = RateLimiter(limit=settings.RATE_LIMIT_REQUESTS)
+        self.rate_limiter: Optional[RateLimiter] = None
+        self.settings: Optional[Settings] = None
         self.logger = get_logger("RateLimiterMiddleware")
 
     async def dispatch(
@@ -103,46 +103,40 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         Returns:
             HTTP-response
         """
-        # Hämta klient-IP, med stöd för proxy headers
-        client_ip = request.client.host
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        
-        if forwarded_for:
-            # Använd den första IP:n i X-Forwarded-For
-            client_ip = forwarded_for.split(",")[0].strip()
+        if self.settings is None:
+            self.settings = request.app.state.settings
 
-        # Skippa rate-limiting för vissa kritiska endpoints
-        if request.url.path in ["/health", "/ping", "/metrics"]:
+        if not self.settings.RATE_LIMIT_ENABLED:
             return await call_next(request)
 
-        # Kontrollera om requesten är tillåten
+        if self.rate_limiter is None:
+            self.rate_limiter = RateLimiter(
+                limit=self.settings.RATE_LIMIT_REQUESTS,
+                window=self.settings.RATE_LIMIT_WINDOW_SECONDS
+            )
+
+        # Hämta klient-IP, med stöd för proxy headers
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "testclient").split(',')[0].strip()
+        
+        if not client_ip:
+            client_ip = "unknown"
+
         allowed, remaining, reset_in = await self.rate_limiter.is_allowed(client_ip)
         
-        # Lägg till rate-limit-headers
-        response_headers = {
-            "X-RateLimit-Limit": str(self.rate_limiter.limit),
-            "X-RateLimit-Remaining": str(remaining),
-            "X-RateLimit-Reset": str(reset_in),
-        }
-        
         if not allowed:
-            self.logger.warning(
-                f"Rate limit exceeded for IP: {client_ip}",
-                extra={"client_ip": client_ip, "path": request.url.path}
-            )
-            
-            # Skapa ett 429 Too Many Requests-svar
+            self.logger.warning(f"Rate limit överskriden för IP: {client_ip}")
             return Response(
-                content='{"error": "Too many requests. Try again later."}',
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                headers={**response_headers, "Content-Type": "application/json"},
+                content='{"error": "Too many requests"}',
+                headers={
+                    "Retry-After": str(reset_in),
+                    "Content-Type": "application/json"
+                }
             )
             
-        # Om tillåten, fortsätt till nästa middleware
         response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(self.rate_limiter.limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_in)
         
-        # Lägg till rate-limit-headers till svaret
-        for key, value in response_headers.items():
-            response.headers[key] = value
-            
         return response

@@ -1,91 +1,62 @@
 import pytest
+from unittest.mock import AsyncMock
+from fastapi import HTTPException
 
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-from unittest.mock import patch, MagicMock
 from app.services.ai_service import AIService
-import requests
+from app.services.protocols import LLMClientProtocol
 
+# --- Fixtures ---
 
-def mock_query_response(*args, **kwargs):
-    return "Mocked AI response"
+@pytest.fixture
+def mock_llm_client():
+    """Provides a mock LLM client that conforms to the LLMService."""
+    mock = AsyncMock(spec=LLMClientProtocol)
+    # Mock the 'chat' method, as that's what AIService uses
+    mock.chat = AsyncMock(return_value="Mocked LLM response.")
+    return mock
 
+@pytest.fixture
+def ai_service(mock_llm_client):
+    """Provides an AIService instance with a mocked LLM client."""
+    # AIService constructor only takes an llm_client
+    return AIService(llm_client=mock_llm_client)
 
-def mock_query_error(*args, **kwargs):
-    raise Exception("API connection failed")
+# --- AI Service Tests (Refactored) ---
 
+@pytest.mark.asyncio
+async def test_ai_service_initialization(ai_service, mock_llm_client):
+    """Tests that the AIService initializes correctly with its LLM client."""
+    assert ai_service.llm_client is mock_llm_client
 
-def test_ai_service_initialization():
-    """Test AIService initialization."""
-    service = AIService(openwebui_url="http://test.com", api_token="test_token", model="test_model")
-    assert service is not None
-    assert service.url == "http://test.com"
-    assert service.token == "test_token"
-    assert service.model == "test_model"
+@pytest.mark.asyncio
+async def test_ai_service_query_success(ai_service, mock_llm_client):
+    """Tests a successful query flow through the AI service."""
+    user_prompt = "What is the test about?"
+    response = await ai_service.query(user_prompt)
 
-
-def test_ai_service_query_success():
-    """Test successful query with AIService."""
-    service = AIService(openwebui_url="http://test.com", api_token="test_token", model="test_model")
-    prompt = "Hello, AI!"
+    # Verify that the llm_client's chat method was called correctly
+    expected_messages = [{"role": "user", "content": user_prompt}]
+    mock_llm_client.chat.assert_awaited_once_with(messages=expected_messages)
     
-    with patch("requests.post") as mock_post:
-        mock_response = MagicMock()
-        mock_response.json.return_value = {'response': 'Mocked AI response'}
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
-        response = service.query(prompt)
-        assert response == "Mocked AI response"
-        mock_post.assert_called_once()
+    # Verify the final output
+    assert response == "Mocked LLM response."
 
-
-def test_ai_service_query_empty_prompt():
-    """Test AI service query with empty prompt."""
-    ai_service = AIService(openwebui_url="http://example.com", api_token="dummy_token", model="dummy_model")
-    with pytest.raises(ValueError) as exc_info:
-        ai_service.query("")
-    assert str(exc_info.value) == "Prompt cannot be empty"
-
-
-def test_ai_service_query_error():
-    """Test AI service query handling of API errors."""
-    service = AIService(openwebui_url="http://test.com", api_token="test_token", model="test_model")
-    prompt = "Hello, AI!"
+@pytest.mark.asyncio
+async def test_ai_service_query_with_empty_prompt(ai_service):
+    """Tests that querying with an empty prompt raises an HTTPException."""
+    with pytest.raises(HTTPException) as exc_info:
+        await ai_service.query("")
     
-    with patch("requests.post") as mock_post:
-        mock_post.side_effect = Exception("API connection failed")
-        response = service.query(prompt)
-        assert response == "Tyvärr kan vi inte svara automatiskt just nu. Vänligen kontakta support eller prova igen senare."
+    assert exc_info.value.status_code == 400
+    assert "Prompt cannot be empty" in exc_info.value.detail
 
-
-def test_ai_service_query_timeout():
-    """Test AI service query handling of request timeout."""
-    service = AIService(openwebui_url="http://test.com", api_token="test_token", model="test_model")
-    prompt = "Hello, AI!"
+@pytest.mark.asyncio
+async def test_ai_service_handles_llm_exception(ai_service, mock_llm_client):
+    """Tests that the service properly handles exceptions from the LLM client."""
+    mock_llm_client.chat.side_effect = Exception("LLM provider is down")
     
-    with patch("requests.post") as mock_post:
-        mock_post.side_effect = requests.exceptions.RequestException("Request timed out")
-        response = service.query(prompt)
-        assert response == "Tyvärr kan vi inte svara automatiskt just nu. Vänligen kontakta support eller prova igen senare."
+    with pytest.raises(HTTPException) as exc_info:
+        await ai_service.query("A prompt that will fail")
 
-
-def test_ai_service_update_config():
-    """Test updating configuration of AIService."""
-    service = AIService(openwebui_url="http://test.com", api_token="test_token", model="test_model")
-    new_url = "http://new-test.com"
-    new_token = "new_test_token"
-    new_model = "new_test_model"
-    
-    service.update_config(openwebui_url=new_url, api_token=new_token, model=new_model)
-    assert service.url == new_url
-    assert service.token == new_token
-    assert service.model == new_model
-
-    # Test partial update
-    newer_url = "http://newer-test.com"
-    service.update_config(openwebui_url=newer_url)
-    assert service.url == newer_url
-    assert service.token == new_token  # unchanged
-    assert service.model == new_model  # unchanged
+    assert exc_info.value.status_code == 503
+    assert "AI service is currently unavailable" in exc_info.value.detail

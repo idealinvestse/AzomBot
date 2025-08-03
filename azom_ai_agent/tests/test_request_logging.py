@@ -4,17 +4,14 @@ Test suite för RequestLoggingMiddleware.
 Detta testmodul testar funktionaliteten för loggnings-middleware
 med fokus på korrelations-ID och korrekt loggning av begäran.
 """
-import asyncio
 import logging
 import re
-import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.middlewares.request_logging import RequestLoggingMiddleware
 
@@ -39,11 +36,11 @@ def app():
 @pytest.fixture
 def client(app):
     """Fixture för att skapa en TestClient för FastAPI."""
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
-@pytest.mark.asyncio
-async def test_request_logging_adds_correlation_id(client):
+def test_request_logging_adds_correlation_id(client):
     """Test att middleware lägger till ett korrelations-ID i svaret."""
     response = client.get("/test")
     assert response.status_code == 200
@@ -58,8 +55,7 @@ async def test_request_logging_adds_correlation_id(client):
     )
 
 
-@pytest.mark.asyncio
-async def test_request_logging_adds_process_time_in_debug(client):
+def test_request_logging_adds_process_time_in_debug(client):
     """Test att middleware lägger till processeringstid i svaret i debug-läge."""
     response = client.get("/test")
     assert response.status_code == 200
@@ -70,49 +66,44 @@ async def test_request_logging_adds_process_time_in_debug(client):
     assert re.match(r"^\d+\.\d+ms$", process_time)
 
 
-@pytest.mark.asyncio
-async def test_request_logging_logs_info(client, caplog):
+def test_request_logging_logs_info(client, caplog):
     """Test att middleware loggar information på INFO-nivå."""
     with caplog.at_level(logging.INFO):
-        response = client.get("/test")
+        client.get("/test")
     
     # Verifiera att vi har loggat både inkommande förfrågan och svar
     assert any("Inkommande förfrågan" in record.message for record in caplog.records)
     assert any("Förfrågan hanterad" in record.message for record in caplog.records)
     
     # Verifiera att metodinformation loggas korrekt
-    method_logs = [r for r in caplog.records if hasattr(r, "method")]
-    assert any(r.method == "GET" for r in method_logs)
-    
-    # Verifiera att sökväg loggas korrekt
-    path_logs = [r for r in caplog.records if hasattr(r, "path")]
-    assert any(r.path == "/test" for r in path_logs)
+    request_log = next(r for r in caplog.records if r.message == "Inkommande förfrågan")
+    assert request_log.method == "GET"
+    assert request_log.path == "/test"
 
 
-@pytest.mark.asyncio
-async def test_request_logging_logs_exceptions(client, caplog):
+def test_request_logging_logs_exceptions(client, caplog):
     """Test att middleware loggar undantag på ERROR-nivå."""
     with caplog.at_level(logging.ERROR):
-        # Anropa endpoint som kastar undantag
         with pytest.raises(ValueError):
             client.get("/error")
+
+    # Verifiera att ett undantag har loggats
+    error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert len(error_logs) == 1
     
-    # Verifiera att undantag loggas
-    assert any("Ohanterat undantag" in record.message for record in caplog.records)
-    
-    # Verifiera att undantagsinformation finns med
-    exception_logs = [r for r in caplog.records if "Testfel" in str(r.message)]
-    assert len(exception_logs) > 0
+    log_record = error_logs[0]
+    assert "Ohanterat undantag" in log_record.message
+    assert log_record.exc_info is not None
+    # Verifiera att traceback innehåller rätt undantagstyp och meddelande
+    formatted_exception = "".join(logging.Formatter().formatException(log_record.exc_info))
+    assert "ValueError: Testfel" in formatted_exception
 
 
-@pytest.mark.asyncio
-async def test_request_logging_warns_on_error_status(app):
+def test_request_logging_warns_on_error_status():
     """Test att middleware loggar varningar för felstatuskoder."""
-    # Skapa en modifierad app med en endpoint som returnerar 404
     app = FastAPI()
     mock_logger = MagicMock()
     
-    # Patcha get_logger för att returnera vår mock
     with patch("app.middlewares.request_logging.get_logger", return_value=mock_logger):
         app.add_middleware(RequestLoggingMiddleware)
         
@@ -120,50 +111,51 @@ async def test_request_logging_warns_on_error_status(app):
         async def not_found():
             return JSONResponse(status_code=404, content={"error": "Not found"})
         
-        client = TestClient(app)
-        response = client.get("/not_found")
+        with TestClient(app) as client:
+            client.get("/not_found")
         
         # Verifiera att warning-metoden anropades för 404
         mock_logger.warning.assert_called_once()
-        
+        warning_call_args = mock_logger.warning.call_args
+        assert warning_call_args.args[0] == "Förfrågan hanterad"
+        assert warning_call_args.kwargs["extra"]["status_code"] == 404
+
 
 @pytest.mark.asyncio
-async def test_middleware_with_complex_request():
-    """Test middleware med en komplex manuellt skapad request."""
-    # Skapa en manuell request med specifika headers
+async def test_middleware_with_complex_request(caplog):
+    """Testar middleware med en manuellt skapad, mer komplex request."""
     scope = {
-        "type": "http", 
+        "type": "http",
         "method": "POST",
         "path": "/api/test",
         "headers": [
-            (b"user-agent", b"test-agent"),
+            (b"user-agent", b"test-agent-complex"),
             (b"content-type", b"application/json"),
-            (b"x-custom-header", b"test-value")
         ],
-        "client": ("192.168.1.1", 12345)
+        "client": ("192.168.1.100", 54321),
+        "state": {},  # Viktigt för att middleware ska kunna fästa correlation_id
     }
     
-    # Skapa en mock för call_next
-    async def mock_call_next(request):
-        return Response(content=b'{"status":"ok"}', media_type="application/json")
-    
+    async def mock_call_next(request: Request) -> Response:
+        return Response(status_code=201, content=b'{"status":"created"}')
+
     request = Request(scope)
-    middleware = RequestLoggingMiddleware(lambda: None)
-    
-    # Anropa dispatch direkt
-    with patch("app.middlewares.request_logging.get_logger") as mock_get_logger:
-        mock_logger = MagicMock()
-        mock_get_logger.return_value = mock_logger
-        
+    middleware = RequestLoggingMiddleware(app=FastAPI())
+
+    with caplog.at_level(logging.INFO):
         response = await middleware.dispatch(request, mock_call_next)
-        
-        # Verifiera att middleware fungerar som förväntat
-        assert isinstance(response, Response)
-        assert "X-Correlation-ID" in response.headers
-        
-        # Verifiera loggning
-        mock_logger.info.assert_called()
-        # Kontrollera att användar-agent och IP loggades
-        call_args = mock_logger.info.call_args_list[0][1]["extra"]
-        assert call_args["client_ip"] == "192.168.1.1"
-        assert call_args["user_agent"] == "test-agent"
+
+    assert response.status_code == 201
+    assert "X-Correlation-ID" in response.headers
+    assert "X-Process-Time" in response.headers
+
+    # Verifiera loggarna
+    request_log = next(r for r in caplog.records if r.message == "Inkommande förfrågan")
+    response_log = next(r for r in caplog.records if r.message == "Förfrågan hanterad")
+
+    assert request_log.method == "POST"
+    assert request_log.path == "/api/test"
+    assert request_log.client_ip == "192.168.1.100"
+    assert request_log.user_agent == "test-agent-complex"
+    assert response_log.status_code == 201
+

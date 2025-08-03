@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Form
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 import shutil
@@ -23,10 +23,10 @@ def _is_supported_file(filename: str) -> bool:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_knowledge_files(
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
-    category: str = "general",
-    description: Optional[str] = None,
-    background_tasks: BackgroundTasks = None
+    category: str = Form("general"),
+    description: Optional[str] = Form(None)
 ):
     uploaded_files = []
     total_size = 0
