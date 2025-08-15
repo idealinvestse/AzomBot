@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getModeHeaders } from '@/lib/mode';
 
 const API_BASE_URL = '/api/v1';
 
@@ -22,6 +23,7 @@ export async function postChatMessage(request: ChatRequest): Promise<ChatRespons
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getModeHeaders(),
     },
     body: JSON.stringify(validatedRequest),
   });
@@ -57,7 +59,11 @@ export type SystemStats = z.infer<typeof SystemStatsSchema>;
 export type KpiCardData = z.infer<typeof KpiCardDataSchema>;
 
 export async function fetchSystemStats(): Promise<SystemStats> {
-  const response = await fetch(`${API_BASE_URL}/stats`);
+  const response = await fetch(`${API_BASE_URL}/stats`, {
+    headers: {
+      ...getModeHeaders(),
+    },
+  });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred' }));

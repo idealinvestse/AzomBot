@@ -16,7 +16,6 @@ def get_ai_service(llm_client: LLMServiceProtocol = Depends(get_llm_client)) -> 
 async def troubleshoot_pipeline(request: TroubleshootRequest, ai_service: AIService = Depends(get_ai_service)):
     if not request.prompt:
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-    
     response_text = await ai_service.query(request.prompt, context=request.model_dump())
     return ChatResponse(response=response_text)
 
@@ -24,6 +23,5 @@ async def troubleshoot_pipeline(request: TroubleshootRequest, ai_service: AIServ
 async def general_query(request: GeneralQuery, ai_service: AIService = Depends(get_ai_service)):
     if not request.prompt:
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-
     response_text = await ai_service.query(request.prompt, context=request.model_dump())
     return ChatResponse(response=response_text)

@@ -26,11 +26,25 @@ class AIService:
             )
         
         context = context or {}
-        # The system prompt is now managed by the llm_client/prompt_utils, 
-        # so we only need to send the user message.
-        messages = [
-            {"role": "user", "content": user_prompt}
-        ]
+        mode_val = str(context.get("azom_mode", "")).lower() if context else ""
+        use_light_mode = mode_val == "light"
+
+        if use_light_mode:
+            # Compose system prompt content from prompt templates only (no retrieval)
+            full_prompt = await compose_full_prompt(user_prompt, context)
+            # compose_full_prompt appends the user_prompt at the end; strip it for system-only content
+            system_content = full_prompt
+            if full_prompt.endswith(user_prompt):
+                system_content = full_prompt[: -len(user_prompt)].rstrip()
+            messages = [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_prompt},
+            ]
+        else:
+            # Default behavior: send only the user message; backends manage system prompt
+            messages = [
+                {"role": "user", "content": user_prompt}
+            ]
         
         try:
             # The model is now selected based on the backend configuration

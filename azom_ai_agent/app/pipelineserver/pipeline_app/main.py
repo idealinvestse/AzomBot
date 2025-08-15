@@ -12,7 +12,8 @@ from .pipelines.azom_installation_pipeline import AZOMInstallationPipeline
 from .pipelines.support_pipeline import SupportPipeline
 from .services.llm_client import get_llm_client, LLMServiceProtocol
 from .services.rag_service import RAGService
-
+from app.core.modes import Mode
+from app.core.feature_flags import rag_enabled, payload_cap_bytes
 
 init_logging()  # root logging
 logger = get_logger(__name__)
@@ -90,12 +91,80 @@ async def install_pipeline(request: PipelineInstallRequest):
         )
 
 @app.post("/chat/azom")
-async def chat_with_azom(request: ChatRequest, llm_client: LLMServiceProtocol = Depends(get_llm_client)):
+async def chat_with_azom(request: ChatRequest, http_request: Request, llm_client: LLMServiceProtocol = Depends(get_llm_client)):
     """Free-form chat endpoint that augments user query with RAG context and calls local OpenWebUI/Ollama via LLMClient."""
     if not request.message or not request.message.strip():
         raise HTTPException(status_code=422, detail="Message is required")
-    # 1. Fetch context via simple keyword search RAG
-    context_items = await rag_service.search(f"{request.car_model or ''} {request.message}", top_k=3)
+    # Determine mode from request.state (may be missing if middleware not present)
+    req_mode = getattr(getattr(http_request, "state", None), "mode", None)
+    if not isinstance(req_mode, Mode):
+        # Fallback to header or query param if middleware didn't set state
+        mode_str = http_request.headers.get("X-AZOM-Mode") or http_request.query_params.get("mode")
+        try:
+            from app.core.modes import Mode as CoreMode  # avoid confusion with local import
+            req_mode = CoreMode.from_str(mode_str) if mode_str else None
+        except Exception:
+            req_mode = None
+    is_light = isinstance(req_mode, Mode) and req_mode == Mode.LIGHT
+    try:
+        logger.info(
+            "Chat mode resolved",
+            extra={
+                "mode": req_mode.value if isinstance(req_mode, Mode) else "unknown",
+                "path": str(http_request.url.path),
+            },
+        )
+    except Exception:
+        pass
+
+    # Enforce payload cap based on mode (stricter in LIGHT mode)
+    try:
+        cap = payload_cap_bytes(req_mode)
+    except Exception:
+        cap = payload_cap_bytes(None)
+    req_size = len(request.message.encode("utf-8")) if request.message else 0
+    try:
+        logger.info(
+            "Chat payload size check",
+            extra={
+                "payload_bytes": req_size,
+                "cap_bytes": cap,
+                "mode": req_mode.value if isinstance(req_mode, Mode) else "unknown",
+            },
+        )
+    except Exception:
+        pass
+    if request.message and req_size > cap:
+        raise HTTPException(status_code=413, detail="Request payload too large for current mode")
+
+    # 1. Optionally fetch context via RAG (centralized feature flag; disabled in LIGHT)
+    context_items = []
+    rag_on = rag_enabled(req_mode)
+    try:
+        logger.info(
+            "RAG gating decision",
+            extra={
+                "rag_enabled": rag_on,
+                "mode": req_mode.value if isinstance(req_mode, Mode) else "unknown",
+            },
+        )
+    except Exception:
+        pass
+    if rag_on:
+        context_items = await rag_service.search(
+            f"{request.car_model or ''} {request.message}", top_k=3
+        )
+    try:
+        logger.info(
+            "RAG search completed",
+            extra={
+                "context_item_count": len(context_items),
+                "rag_executed": rag_on,
+            },
+        )
+    except Exception:
+        pass
+    # Build context snippet only if we have items (i.e., not in LIGHT)
     context_snippets = "\n".join([f"- {c['content']}" for c in context_items])
 
     system_prompt = (

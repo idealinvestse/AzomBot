@@ -16,9 +16,11 @@ Exempel:
     # Lägg till middleware
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RateLimitingMiddleware, settings=settings)
+    app.add_middleware(ModeMiddleware)
     ```
 """
 from .rate_limiter import RateLimitingMiddleware
 from .request_logging import RequestLoggingMiddleware
+from .mode import ModeMiddleware
 
-__all__ = ["RateLimitingMiddleware", "RequestLoggingMiddleware"]
+__all__ = ["RateLimitingMiddleware", "RequestLoggingMiddleware", "ModeMiddleware"]

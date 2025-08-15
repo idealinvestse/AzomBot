@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from app.logger import get_logger
+from app.core.modes import Mode
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -58,6 +59,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
 
         # Logga information om den inkommande förfrågan
+        mode_obj = getattr(getattr(request, "state", None), "mode", None)
+        mode_str = mode_obj.value if isinstance(mode_obj, Mode) else request.headers.get("X-AZOM-Mode", "unknown")
         self.logger.info(
             "Inkommande förfrågan",
             extra={
@@ -66,6 +69,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "correlation_id": correlation_id,
                 "client_ip": request.client.host if request.client else "unknown",
                 "user_agent": request.headers.get("user-agent", "unknown"),
+                "mode": mode_str,
             },
         )
 
@@ -105,6 +109,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "correlation_id": correlation_id,
                 "status_code": response.status_code,
                 "duration_ms": f"{process_time:.2f}",
+                "mode": mode_str,
             },
         )
 

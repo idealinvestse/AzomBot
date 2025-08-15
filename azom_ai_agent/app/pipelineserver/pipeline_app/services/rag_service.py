@@ -3,19 +3,18 @@
 import json
 import os
 
-from .vector_store_service import VectorStoreService
 from functools import lru_cache
+
+# Make VectorStoreService patchable from tests by exposing a module attribute
+VectorStoreService = None  # type: ignore
 
 class RAGService:
     """Retrieval-Augmented Generation service för AZOM kunskapsbas."""
     def __init__(self):
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../data'))
-        self.vector_store = None
-        try:
-            self.vector_store = VectorStoreService(data_dir)
-        except Exception:
-            # fall back to keyword
-            pass
+        # Vector store initialiseras lazy för att undvika tunga beroenden vid import
+        self._vector_store = None
+        self._data_dir = data_dir
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../data'))
         self.products_path = os.path.join(data_dir, 'products.json')
         self.troubleshooting_path = os.path.join(data_dir, 'troubleshooting.json')
@@ -29,25 +28,50 @@ class RAGService:
                 except Exception:
                     pass
 
-    async def search(self, query: str, top_k: int = 5):
+    def _get_vector_store(self):
+        """Lazy-ladda VectorStoreService först när det behövs."""
+        if self._vector_store is not None:
+            return self._vector_store
+        try:
+            # Lokal import för att undvika att ladda faiss/sentence-transformers i onödan
+            global VectorStoreService  # type: ignore
+            if VectorStoreService is None:
+                from .vector_store_service import VectorStoreService as _VSS  # type: ignore
+                VectorStoreService = _VSS
+            self._vector_store = VectorStoreService(self._data_dir) if VectorStoreService else None  # type: ignore
+        except Exception:
+            self._vector_store = None
+        return self._vector_store
+
+    @property
+    def vector_store(self):
+        """Backwards-compatible accessor that lazily initializes and returns the vector store."""
+        if self._vector_store is None:
+            return self._get_vector_store()
+        return self._vector_store
+
+    async def search(self, query: str, top_k: int = 5, use_vectors: bool = True):
         """
         Söker efter relevanta dokument baserat på frågan.
         
         Args:
             query: Sökfrågan som text
             top_k: Maximalt antal resultat att returnera
+            use_vectors: Om True används vektorindex om tillgängligt, annars endast keyword-sökning
             
         Returns:
             Lista med matchande dokument
         """
-        # 1. Try vector store if available
-        if self.vector_store:
-            docs = await self.vector_store.similarity_search(query, top_k)
-            return [{
-                "title": f"Match {i+1}", 
-                "content": txt,
-                "similarity_score": score
-            } for i, (txt, score) in enumerate(docs)]
+        # 1. Prova vektorindex om tillåtet och tillgängligt
+        if use_vectors:
+            vector_store = self._get_vector_store()
+            if vector_store:
+                docs = await vector_store.similarity_search(query, top_k)
+                return [{
+                    "title": f"Match {i+1}", 
+                    "content": txt,
+                    "similarity_score": score
+                } for i, (txt, score) in enumerate(docs)]
 
         # Fallback keyword search
         results = []

@@ -14,9 +14,14 @@ import os
 from typing import List, Dict, Any, Optional, Protocol, runtime_checkable
 import httpx
 from app.config import get_current_config
-from fastapi import Depends
+from app.core.feature_flags import llm_timeout_seconds
+from fastapi import Depends, Request
+from app.core.modes import Mode
+from app.logger import get_logger
 
 __all__ = ["LLMClient", "GroqClient", "get_llm_client", "LLMServiceProtocol"]
+
+logger = get_logger("LLMClientFactory")
 
 @runtime_checkable
 class LLMServiceProtocol(Protocol):
@@ -116,18 +121,60 @@ class GroqClient:
 
 _clients: Dict[str, LLMServiceProtocol] = {}
 
-async def get_llm_client(config: Dict[str, Any] = Depends(get_current_config)) -> LLMServiceProtocol:
-    """Factory dependency that provides the correct LLM client based on runtime settings."""
+async def get_llm_client(request: Request = None, config: Dict[str, Any] = Depends(get_current_config)) -> LLMServiceProtocol:
+    """Factory dependency that provides the correct LLM client based on runtime settings.
+
+    Supports two calling conventions:
+    - FastAPI DI: get_llm_client(request: Request, config: dict = Depends(...))
+    - Tests/util: get_llm_client(config: dict)
+
+    In LIGHT mode (from request.state.mode), force OpenWebUI backend.
+    """
+    # If called as get_llm_client(config) in tests, the first arg is actually the config dict.
+    if not isinstance(config, dict) and isinstance(request, dict):
+        config = request  # type: ignore[assignment]
+        request = None
+
     backend = config.get("LLM_BACKEND", "openwebui").lower()
-    
+    # If request mode is LIGHT, force OpenWebUI and disable external backends.
+    if request is not None:
+        req_mode = getattr(getattr(request, "state", None), "mode", None)
+        if isinstance(req_mode, Mode) and req_mode == Mode.LIGHT:
+            backend = "openwebui"
+    else:
+        req_mode = None
+    timeout = llm_timeout_seconds(req_mode)
+
+    try:
+        logger.info(
+            "LLM backend selection",
+            extra={
+                "backend": backend,
+                "mode": req_mode.value if isinstance(req_mode, Mode) else "unknown",
+                "timeout_seconds": timeout,
+            },
+        )
+    except Exception:
+        pass
+
     # Use a simple cache to avoid re-creating clients on every request
     if backend in _clients:
+        try:
+            logger.info(
+                "LLM client cache hit",
+                extra={
+                    "backend": backend,
+                    "mode": req_mode.value if isinstance(req_mode, Mode) else "unknown",
+                },
+            )
+        except Exception:
+            pass
         return _clients[backend]
 
     if backend == 'groq':
-        client = GroqClient(config)
+        client = GroqClient(config, timeout=timeout)
     elif backend == 'openwebui':
-        client = LLMClient(config)
+        client = LLMClient(config, timeout=timeout)
     else:
         raise ValueError(f"Unsupported LLM backend: {backend}")
     

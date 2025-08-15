@@ -102,6 +102,31 @@ Förslag: GitHub Actions-workflow som kör
 * **/api/v1/support** – support-Q&A.
 * **Admin endpoints** `/admin/products`, `/admin/faq`, `/admin/troubleshooting` (CRUD).
 
+### 6.1 Modes: Light vs Full
+
+Systemet stödjer två körlägen som styrs via headern `X-AZOM-Mode` (alternativt query `?mode=`). Middleware `app/middlewares/mode.py` läser in läget, sätter `request.state.mode` och ekar tillbaka `X-AZOM-Mode` i respons.
+
+- **Light**
+  - RAG/embeddings av (centralt via `app/core/feature_flags.py: rag_enabled/allow_embeddings`).
+  - Externa LLM-backends av – fabriken `get_llm_client()` forcerar OpenWebUI/Ollama.
+  - Striktare timeout till LLM: 10s (`llm_timeout_seconds`).
+  - Mindre payload-tak för chat: 8 KB (`payload_cap_bytes`), 413 returneras om överskrids. Enforceras i `app/pipelineserver/pipeline_app/main.py`.
+  - Observability: Request-loggar inkluderar `mode`; chat-endpoint loggar cap och RAG-beslut; LLM-klienten loggar backend/timeout.
+
+- **Full** (default)
+  - RAG/embeddings på.
+  - Externa LLM-backends tillåtna (t.ex. Groq) om konfigurerat.
+  - Timeout: 30s. Payload-tak: 32 KB.
+
+Exempel:
+
+```bash
+curl -X POST http://localhost:8001/chat/azom \
+  -H "Content-Type: application/json" \
+  -H "X-AZOM-Mode: light" \
+  -d '{"message":"Hur installerar jag AZOM?","car_model":"Volvo"}'
+```
+
 
 ## 7 Database
 Default: SQLite-fil `azom_pipelines.db` skapas automatiskt.

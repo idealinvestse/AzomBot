@@ -11,6 +11,7 @@ import LogsPage from "@/pages/LogsPage";
 import StatusPage from "@/pages/StatusPage";
 import CustomizePage from "@/pages/CustomizePage";
 import StatsPage from "@/pages/StatsPage";
+import { ModeToggle } from "@/components/ui/ModeToggle";
 
 function Sidebar() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -19,7 +20,10 @@ function Sidebar() {
     }`;
   return (
     <div className="h-screen w-56 border-r bg-background p-4 space-y-4">
-      <h1 className="text-lg font-semibold">AZOM Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">AZOM Dashboard</h1>
+        <ModeToggle />
+      </div>
       <nav className="flex flex-col gap-1">
         <NavLink to="/" className={linkClass} end>
           <LayoutDashboard className="h-4 w-4" />Översikt

@@ -2,7 +2,6 @@
 trigger: always_on
 ---
 
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" class="logo" width="120"/>
 
 # Regeluppsättning för AI-utvecklaragent WindSurf
 
@@ -136,4 +135,3 @@ Som AI-utvecklaragent ska du:
 **Mantra**: *"Säker kod först, snabb kod sedan, snygg kod alltid"*
 
 <div style="text-align: center">⁂</div>
-

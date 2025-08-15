@@ -8,7 +8,7 @@ from app.api.v1.knowledge_management import router as knowledge_router
 from app.api.v1.chat import router as chat_router
 from fastapi import Response, status, Depends
 import uvicorn
-from .middlewares import RequestLoggingMiddleware, RateLimitingMiddleware
+from .middlewares import RequestLoggingMiddleware, RateLimitingMiddleware, ModeMiddleware
 from .exceptions import add_exception_handlers
 
 # Skapa och ladda applikationsinställningar
@@ -54,6 +54,7 @@ if settings.CORS_ORIGINS:
     )
 
 # Lägg till custom middleware för loggning och rate-limiting
+app.add_middleware(ModeMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitingMiddleware)
 

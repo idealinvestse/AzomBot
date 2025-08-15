@@ -50,7 +50,38 @@ uvicorn app.main:app --reload            # http://localhost:8000
 uvicorn app.pipelineserver.pipeline_app.main:app --port 8001 --reload   # http://localhost:8001
 ```
 
-Example requests:
+## Modes: Light vs Full
+
+The agent supports two runtime modes that are propagated end-to-end via the `X-AZOM-Mode` header (or `?mode=` query param):
+
+- **Light mode**
+  - RAG/embeddings disabled → system prompt only (`app/core/feature_flags.py: rag_enabled`, `allow_embeddings`).
+  - External LLMs disabled; backend forced to OpenWebUI/Ollama (`get_llm_client()` in `app/pipelineserver/pipeline_app/services/llm_client.py`).
+  - LLM timeout: 10s (`llm_timeout_seconds`).
+  - Payload cap: 8 KB for chat message (`payload_cap_bytes`) enforced in `chat_with_azom()` (`app/pipelineserver/pipeline_app/main.py`).
+  - Response echoes mode header `X-AZOM-Mode` (see `app/middlewares/mode.py`).
+
+- **Full mode** (default)
+  - RAG enabled; embeddings allowed.
+  - External LLMs allowed (e.g., Groq) if configured.
+  - LLM timeout: 30s. Payload cap: 32 KB.
+
+How mode is set/flowing:
+
+- Frontend stores current mode and attaches `X-AZOM-Mode` in all requests via `getModeHeaders()` (`frontend/src/lib/mode.ts`) used by `frontend/src/services/api.ts`.
+- Backend `ModeMiddleware` resolves mode from header or `?mode=` and sets `request.state.mode`, and echoes it back (`app/middlewares/mode.py`).
+- Observability: request logs include mode (`app/middlewares/request_logging.py`), chat endpoint logs payload caps and RAG gating (`app/pipelineserver/pipeline_app/main.py`), and LLM backend selection/timeouts are logged (`llm_client.py`).
+
+Example (curl):
+
+```bash
+curl -X POST http://localhost:8001/chat/azom \
+  -H "Content-Type: application/json" \
+  -H "X-AZOM-Mode: light" \
+  -d '{"message":"Hur installerar jag AZOM?","car_model":"Volvo"}'
+```
+
+## Example requests:
 
 ```bash
 curl http://localhost:8000/ping
