@@ -1,3 +1,5 @@
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pytest
 
 from app.config import FrontendSettings, update_runtime_settings, get_current_config
