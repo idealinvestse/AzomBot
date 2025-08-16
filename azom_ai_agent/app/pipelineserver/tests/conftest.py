@@ -213,10 +213,12 @@ def test_client(db_session):
     # Create test client with our app
     with TestClient(app) as client:
         yield client
-    
-    # Clean up overrides
-    app.dependency_overrides.clear()
-    
+
+    # Clean up only our get_db override, preserving others (e.g., LLM overrides)
+    current = app.dependency_overrides.get(get_db)
+    if current is not None:
+        app.dependency_overrides.pop(get_db, None)
+
     # Restore original dependency if it existed
     if original_get_db is not None:
         app.dependency_overrides[get_db] = original_get_db

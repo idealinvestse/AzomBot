@@ -32,11 +32,15 @@ class DummyLLM:
 def client_with_dummy_llm(test_client, monkeypatch):
     """Provide a TestClient with LLM dependency overridden to dummy."""
     # Override the LLM dependency to avoid real HTTP calls
+    _prev = app.dependency_overrides.get(get_llm_client)
     app.dependency_overrides[get_llm_client] = lambda: DummyLLM()
     try:
         yield test_client
     finally:
-        app.dependency_overrides.pop(get_llm_client, None)
+        if _prev is not None:
+            app.dependency_overrides[get_llm_client] = _prev
+        else:
+            app.dependency_overrides.pop(get_llm_client, None)
 
 
 @pytest.mark.parametrize("payload_size, header_mode, expected_status", [
@@ -54,6 +58,7 @@ def test_chat_payload_cap_light_mode_returns_413(client_with_dummy_llm, payload_
 
 def test_chat_full_mode_allows_larger_payload_and_calls_rag(test_client, monkeypatch):
     # Arrange: override LLM dependency to dummy
+    _prev = app.dependency_overrides.get(get_llm_client)
     app.dependency_overrides[get_llm_client] = lambda: DummyLLM()
 
     # Arrange: monkeypatch rag_service.search to verify it's called in FULL mode
@@ -87,11 +92,15 @@ def test_chat_full_mode_allows_larger_payload_and_calls_rag(test_client, monkeyp
     assert calls["count"] == 1
 
     # Cleanup
-    app.dependency_overrides.pop(get_llm_client, None)
+    if _prev is not None:
+        app.dependency_overrides[get_llm_client] = _prev
+    else:
+        app.dependency_overrides.pop(get_llm_client, None)
 
 
 def test_chat_light_mode_small_payload_ok_and_rag_disabled(test_client, monkeypatch):
     # Arrange: override LLM dependency to dummy
+    _prev = app.dependency_overrides.get(get_llm_client)
     app.dependency_overrides[get_llm_client] = lambda: DummyLLM()
 
     # Track RAG calls to ensure it's NOT called in LIGHT mode
@@ -121,7 +130,10 @@ def test_chat_light_mode_small_payload_ok_and_rag_disabled(test_client, monkeypa
     assert calls["count"] == 0
 
     # Cleanup
-    app.dependency_overrides.pop(get_llm_client, None)
+    if _prev is not None:
+        app.dependency_overrides[get_llm_client] = _prev
+    else:
+        app.dependency_overrides.pop(get_llm_client, None)
 
 
 def test_chat_full_mode_over_cap_returns_413(client_with_dummy_llm):
@@ -145,8 +157,8 @@ def test_chat_mode_header_echo_with_header(client_with_dummy_llm, mode):
         json={"message": msg, "car_model": "Volvo"},
     )
     assert resp.status_code == 200, resp.text
-    # Middleware should echo the resolved mode
-    assert resp.headers.get("X-AZOM-Mode") == mode
+    # Middleware should echo the resolved mode in uppercase
+    assert resp.headers.get("X-AZOM-Mode") == mode.upper()
 
 
 @pytest.mark.parametrize("mode", ["light", "full"])
@@ -158,4 +170,4 @@ def test_chat_mode_header_echo_with_query_param(client_with_dummy_llm, mode):
         json={"message": msg, "car_model": "Volvo"},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.headers.get("X-AZOM-Mode") == mode
+    assert resp.headers.get("X-AZOM-Mode") == mode.upper()

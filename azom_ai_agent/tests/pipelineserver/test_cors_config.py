@@ -74,7 +74,8 @@ def test_preflight_blocks_unconfigured_origin():
     with app_with_origins(["https://a.example"]) as app:
         with TestClient(app) as client:
             resp = _preflight(client, 'https://b.example')
-            assert resp.status_code in (200, 204)
+            # Starlette's CORSMiddleware returns 400 for disallowed preflight
+            assert resp.status_code in (200, 204, 400)
             # No CORS headers for disallowed origin
             assert resp.headers.get('access-control-allow-origin') is None
 

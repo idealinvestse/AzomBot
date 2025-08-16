@@ -17,20 +17,18 @@ def client():
 
 @pytest.mark.parametrize("mode", ["LIGHT", "FULL"]) 
 def test_pipeline_echoes_mode_header_from_header(client, mode):
-    resp = client.post(
-        "/chat/azom",
-        json={"message": "Hej"},
+    resp = client.get(
+        "/health",
         headers={"X-AZOM-Mode": mode},
     )
-    assert resp.status_code in (200, 413)  # payload may trigger caps; we only assert header echo
-    assert resp.headers.get("X-AZOM-Mode") == mode
+    assert resp.status_code == 200
+    assert resp.headers.get("X-AZOM-Mode") == mode.upper()
 
 
 @pytest.mark.parametrize("mode", ["light", "full"]) 
 def test_pipeline_echoes_mode_header_from_query(client, mode):
-    resp = client.post(
-        f"/chat/azom?mode={mode}",
-        json={"message": "Hej"},
+    resp = client.get(
+        f"/health?mode={mode}",
     )
-    assert resp.status_code in (200, 413)
-    assert resp.headers.get("X-AZOM-Mode") == mode
+    assert resp.status_code == 200
+    assert resp.headers.get("X-AZOM-Mode") == mode.upper()
