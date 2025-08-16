@@ -28,6 +28,8 @@ class FrontendSettings(BaseModel):
     openwebui_url: Optional[str] = Field(None, alias='openwebuiUrl')
     openwebui_api_token: Optional[str] = Field(None, alias='openwebuiApiToken')
     groq_api_key: Optional[str] = Field(None, alias='groqApiKey')
+    openai_api_key: Optional[str] = Field(None, alias='openaiApiKey')
+    openai_base_url: Optional[str] = Field(None, alias='openaiBaseUrl')
     target_model: str = Field(alias='targetModel')
 
     model_config = SettingsConfigDict(
@@ -65,6 +67,8 @@ class Settings(BaseSettings):
     OPENWEBUI_URL: str = "http://192.168.50.164:3000"
     OPENWEBUI_API_TOKEN: Optional[str] = "sk-34c40884f61b46fd824629f88cfbf1f0"  # Default för tests/utv
     GROQ_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None
     LLM_BACKEND: str = "openwebui"
     TARGET_MODEL: str = "azom-se-general"
     DATA_PATH: Path = Path("data")
@@ -124,6 +128,8 @@ def update_runtime_settings(new_settings: FrontendSettings):
         'openwebui_url': 'OPENWEBUI_URL',
         'openwebui_api_token': 'OPENWEBUI_API_TOKEN',
         'groq_api_key': 'GROQ_API_KEY',
+        'openai_api_key': 'OPENAI_API_KEY',
+        'openai_base_url': 'OPENAI_BASE_URL',
         'target_model': 'TARGET_MODEL',
     }
     

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     GROQ_API_URL: Optional[str] = None
     GROQ_MODEL: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None
     LLM_BACKEND: Optional[str] = "openwebui"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

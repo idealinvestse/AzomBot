@@ -37,14 +37,14 @@ This repository contains two FastAPI applications:
 
 | Service | Module | Purpose | Default Port |
 |---------|--------|---------|--------------|
-| **Core API** | `app.main:app` | Public endpoints for health-checks, diagnosis and knowledge management | **8000** |
+| **Core API** | `app.main:app` | Public endpoints for health-checks, diagnosis and knowledge management | **8008** |
 | **Pipeline Server** | `app.pipelineserver.pipeline_app.main:app` | Installation, RAG chat & admin endpoints | **8001** |
 
 Run them locally in separate shells (or via Docker-compose):
 
 ```bash
 # Core API
-uvicorn app.main:app --reload            # http://localhost:8000
+uvicorn app.main:app --port 8008 --reload            # http://localhost:8008
 
 # Pipeline server
 uvicorn app.pipelineserver.pipeline_app.main:app --port 8001 --reload   # http://localhost:8001
@@ -59,17 +59,17 @@ The agent supports two runtime modes that are propagated end-to-end via the `X-A
   - External LLMs disabled; backend forced to OpenWebUI/Ollama (`get_llm_client()` in `app/pipelineserver/pipeline_app/services/llm_client.py`).
   - LLM timeout: 10s (`llm_timeout_seconds`).
   - Payload cap: 8 KB for chat message (`payload_cap_bytes`) enforced in `chat_with_azom()` (`app/pipelineserver/pipeline_app/main.py`).
-  - Response echoes mode header `X-AZOM-Mode` (see `app/middlewares/mode.py`).
+  - Response echoes mode header `X-AZOM-Mode` when `ModeMiddleware` is enabled (see `app/middlewares/mode.py`). Core API includes it by default; Pipeline Server resolves mode per-request and does not echo unless you add the middleware.
 
 - **Full mode** (default)
   - RAG enabled; embeddings allowed.
-  - External LLMs allowed (e.g., Groq) if configured.
+  - External LLMs allowed (Groq and OpenAI) if configured.
   - LLM timeout: 30s. Payload cap: 32 KB.
 
 How mode is set/flowing:
 
 - Frontend stores current mode and attaches `X-AZOM-Mode` in all requests via `getModeHeaders()` (`frontend/src/lib/mode.ts`) used by `frontend/src/services/api.ts`.
-- Backend `ModeMiddleware` resolves mode from header or `?mode=` and sets `request.state.mode`, and echoes it back (`app/middlewares/mode.py`).
+- Backend `ModeMiddleware` (Core API) resolves mode from header or `?mode=` and sets `request.state.mode`, and echoes it back (`app/middlewares/mode.py`). The Pipeline Server's `/chat/azom` resolves mode from `request.state` if present, otherwise from header/query, and will not echo unless `ModeMiddleware` is added to that app as well.
 - Observability: request logs include mode (`app/middlewares/request_logging.py`), chat endpoint logs payload caps and RAG gating (`app/pipelineserver/pipeline_app/main.py`), and LLM backend selection/timeouts are logged (`llm_client.py`).
 
 Example (curl):
@@ -84,7 +84,7 @@ curl -X POST http://localhost:8001/chat/azom \
 ## Example requests:
 
 ```bash
-curl http://localhost:8000/ping
+curl http://localhost:8008/ping
 curl -X POST http://localhost:8001/pipeline/install \
      -H "Content-Type: application/json" \
      -d '{"user_input":"Install antenna","car_model":"Volvo XC60"}'
@@ -115,13 +115,16 @@ Copy `.env.example` → `.env` and adjust keys, ports and tokens. Viktiga variab
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENWEBUI_API_URL` | `http://localhost:3000/api` | Base-URL till OpenWebUI/Ollama |
-| `OPENWEBUI_API_KEY` | (empty) | Token om instansen är säkrad |
-| `DATABASE_URL` | `sqlite:///./azom.db` | SQL-alchemy connection |
-| `PROJECT_NAME` | `AZOM AI Agent` | Visas i OpenAPI |
+| `OPENWEBUI_URL` | `http://localhost:3000` | Base URL to OpenWebUI/Ollama |
+| `OPENWEBUI_API_TOKEN` | (empty) | Bearer token if the instance is secured |
+| `LLM_BACKEND` | `openwebui` | LLM backend to use (`openwebui`, `groq`, or `openai`) |
+| `GROQ_API_KEY` | (empty) | API key for Groq (used in Full mode when selected) |
+| `OPENAI_API_KEY` | (empty) | API key for OpenAI (used in Full mode when selected) |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Override base URL if using compatible gateway |
+| `TARGET_MODEL` | `azom-se-general` | Default target model |
 | `LOG_LEVEL` | `INFO` | Root log level |
-| `CORE_API_PORT` | `8000` | Port för core-api |
-| `PIPELINE_API_PORT` | `8001` | Port för pipeline-server |
+
+Note: `TARGET_MODEL` must be valid for the selected `LLM_BACKEND` (e.g., `gpt-4o-mini` for OpenAI, `llama3-8b-8192` for Groq, or a local model name for OpenWebUI/Ollama).
 
 Extra RAG-beroenden:
 ```bash
@@ -150,7 +153,7 @@ npm run preview     # Local preview på http://localhost:4173
 docker compose up --build -d
 ```
 Komponenter som startas:
-* core-api (port 8000)
+* core-api (port 8008)
 * pipeline-server (8001)
 * frontend Vite preview (5173)
 * valfri Postgres (5432) – aktivera i `docker/docker-compose.yml` via env-flag.

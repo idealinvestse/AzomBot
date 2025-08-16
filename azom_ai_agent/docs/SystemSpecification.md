@@ -31,8 +31,8 @@ Systemet är skrivet i Python 3.11, använder Pydantic v2, SQLAlchemy 2 och Uvic
 | **pipeline_server**  | `azom_ai_agent`     | 8001  | Installations- & supportflöden      |
 
 ### 2.2 Packages & runtimes
-* **Python** 3.11 slim-runtime
-* **Node 16+** (vid front-end)
+* **Python** 3.12 slim-runtime
+* **Node 18+** (vid front-end)
 * **SQLite** (default) – replacable med Postgres.
 
 
@@ -63,14 +63,20 @@ azom_ai_agent
 ## 4 Configuration
 Konfiguration läses av **pydantic-settings** från `.env`.
 
-| Key                      | Default | Beskrivning                          |
-|--------------------------|---------|--------------------------------------|
-| `APP_NAME`               | AZOM AI Agent | Titel för core-API               |
-| `PORT` / `PIPELINE_PORT` | 8008 / 8001 | Lyssningsportar                  |
-| `DEBUG`                  | false   | Aktiverar debug-läge                |
-| `OPENWEBUI_API_TOKEN`    | –       | Token till OpenWebUI                 |
-| `TARGET_MODEL`           | azom-se-general | LLM-modell                      |
-| `CACHE_TTL_SECONDS`      | 3600    | Generell cache-TTL                   |
+| Key                      | Default              | Beskrivning                                    |
+|--------------------------|----------------------|------------------------------------------------|
+| `APP_NAME`               | AZOM AI Agent        | Titel för core-API                             |
+| `PORT` (core)            | 8008                 | Lyssningsport för Core API                     |
+| `PORT` (pipeline)        | 8001                 | Lyssningsport för Pipeline Server              |
+| `DEBUG`                  | false                | Aktiverar debug-läge                           |
+| `OPENWEBUI_URL`          | http://localhost:3000| Bas-URL till OpenWebUI/Ollama                  |
+| `OPENWEBUI_API_TOKEN`    | –                    | Bearer-token till OpenWebUI                    |
+| `LLM_BACKEND`            | openwebui            | Välj backend (`openwebui`, `groq`, `openai`)   |
+| `GROQ_API_KEY`           | –                    | API-nyckel för Groq (vid Full mode)            |
+| `OPENAI_API_KEY`         | –                    | API-nyckel för OpenAI (vid Full mode)          |
+| `OPENAI_BASE_URL`        | https://api.openai.com/v1 | Bas-URL (kan peka på kompatibel gateway) |
+| `TARGET_MODEL`           | azom-se-general      | Standardmodell                                 |
+| `CACHE_TTL_SECONDS`      | 3600                 | Generell cache-TTL                             |
 
 För kompletta exempel se `.env.example`.
 
@@ -100,7 +106,7 @@ Förslag: GitHub Actions-workflow som kör
 * **/ping** – core uptime & version.
 * **/pipeline/install** – POST body `{user_input, car_model, user_experience}` → installations-rekommendation.
 * **/api/v1/support** – support-Q&A.
-* **Admin endpoints** `/admin/products`, `/admin/faq`, `/admin/troubleshooting` (CRUD).
+* **Admin endpoints (planerade)** `/admin/products`, `/admin/faq`, `/admin/troubleshooting` (CRUD) – ej implementerade i nuläget.
 
 ### 6.1 Modes: Light vs Full
 
@@ -111,12 +117,17 @@ Systemet stödjer två körlägen som styrs via headern `X-AZOM-Mode` (alternati
   - Externa LLM-backends av – fabriken `get_llm_client()` forcerar OpenWebUI/Ollama.
   - Striktare timeout till LLM: 10s (`llm_timeout_seconds`).
   - Mindre payload-tak för chat: 8 KB (`payload_cap_bytes`), 413 returneras om överskrids. Enforceras i `app/pipelineserver/pipeline_app/main.py`.
-  - Observability: Request-loggar inkluderar `mode`; chat-endpoint loggar cap och RAG-beslut; LLM-klienten loggar backend/timeout.
 
 - **Full** (default)
-  - RAG/embeddings på.
-  - Externa LLM-backends tillåtna (t.ex. Groq) om konfigurerat.
-  - Timeout: 30s. Payload-tak: 32 KB.
+  - RAG på; embeddings tillåtna.
+  - Externa LLM-backends tillåtna (Groq och OpenAI) om konfigurerade.
+  - Timeout till LLM: 30s. Payload cap: 32 KB.
+
+Stödda LLM-backends:
+
+- `openwebui` (default i Light; OpenAI-kompatibelt API mot OpenWebUI/Ollama)
+- `groq` (Groq Cloud – OpenAI-kompatibel endpoint)
+- `openai` (OpenAI – `https://api.openai.com/v1` eller kompatibel gateway via `OPENAI_BASE_URL`)
 
 Exempel:
 
@@ -145,7 +156,7 @@ Inkluderar asynkrona tester med `pytest-asyncio`.
 
 
 ## 9 Security & Best Practices
-* Bandit, Flake8 och Black i dev-deps.
+* Ruff (lint/format), Mypy (strict typing) och Bandit i dev-deps och pre-commit.
 * CORS är globalt öppet – stäng till i prod.
 * Tokens läses från miljö, aldrig hårdkodade.
 

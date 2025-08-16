@@ -19,7 +19,7 @@ from fastapi import Depends, Request
 from app.core.modes import Mode
 from app.logger import get_logger
 
-__all__ = ["LLMClient", "GroqClient", "get_llm_client", "LLMServiceProtocol"]
+__all__ = ["LLMClient", "GroqClient", "OpenAIClient", "get_llm_client", "LLMServiceProtocol"]
 
 logger = get_logger("LLMClientFactory")
 
@@ -117,6 +117,44 @@ class GroqClient:
             await self._client.aclose()
 
 
+# --- OpenAI Client ---
+
+class OpenAIClient:
+    """Client for OpenAI Chat Completions API."""
+
+    def __init__(self, config: Dict[str, Any], timeout: int = 30):
+        self.api_key = config.get("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required.")
+        self.base_url = (config.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        self.default_model = config.get("TARGET_MODEL") or "gpt-4o-mini"
+        self._timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    async def chat(self, messages: List[Dict[str, str]], model: Optional[str] = None, stream: bool = False) -> str:
+        payload: Dict[str, Any] = {
+            "messages": messages,
+            "model": model or self.default_model,
+            "stream": stream,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+
+        resp = await self._client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
 # --- Client Factory ---
 
 _clients: Dict[str, LLMServiceProtocol] = {}
@@ -175,6 +213,8 @@ async def get_llm_client(request: Request = None, config: Dict[str, Any] = Depen
         client = GroqClient(config, timeout=timeout)
     elif backend == 'openwebui':
         client = LLMClient(config, timeout=timeout)
+    elif backend == 'openai':
+        client = OpenAIClient(config, timeout=timeout)
     else:
         raise ValueError(f"Unsupported LLM backend: {backend}")
     
