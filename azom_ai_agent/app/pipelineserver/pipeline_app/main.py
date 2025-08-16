@@ -14,6 +14,7 @@ from .services.llm_client import get_llm_client, LLMServiceProtocol
 from .services.rag_service import RAGService
 from app.core.modes import Mode
 from app.core.feature_flags import rag_enabled, payload_cap_bytes
+from app.middlewares import ModeMiddleware
 
 init_logging()  # root logging
 logger = get_logger(__name__)
@@ -21,6 +22,7 @@ logger = get_logger(__name__)
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
 # Add middleware & exception handlers
+app.add_middleware(ModeMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 add_exception_handlers(app)
 

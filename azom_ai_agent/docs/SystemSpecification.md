@@ -8,7 +8,7 @@ AZOM AI Agent är ett containeriserat fler-tjänst-system som erbjuder:
 * **Pipeline Server** (FastAPI) för installations- och supportflöden inklusive admin-gränssnitt.
 * **Admin-front-end** (valfritt, Vite/React) för produkthantering och FAQ-underhåll.
 
-Systemet är skrivet i Python 3.11, använder Pydantic v2, SQLAlchemy 2 och Uvicorn som ASGI-server. All logik täcks av >40 automatiska Pytest-tester.
+Systemet är skrivet i Python 3.12, använder Pydantic v2, SQLAlchemy 2 och Uvicorn som ASGI-server. All logik täcks av >40 automatiska Pytest-tester.
 
 
 ## 2 High-level architecture
@@ -56,7 +56,6 @@ azom_ai_agent
 ├── data/                     # Embeddings, knowledge base
 ├── docker/                   # Dockerfile & compose
 ├── scripts/                  # Alembic, init-data
-├── run.sh / run.bat          # Dev helpers
 └── docs/                     # ← detta dokument
 ```
 
@@ -106,11 +105,13 @@ Förslag: GitHub Actions-workflow som kör
 * **/ping** – core uptime & version.
 * **/pipeline/install** – POST body `{user_input, car_model, user_experience}` → installations-rekommendation.
 * **/api/v1/support** – support-Q&A.
+* **/chat/azom** – (Pipeline Server) POST body `{message, car_model?}` → chat med RAG beroende på mode.
+* **/api/v1/chat/azom** – (Core API) POST body `{prompt}` → generisk chat.
 * **Admin endpoints (planerade)** `/admin/products`, `/admin/faq`, `/admin/troubleshooting` (CRUD) – ej implementerade i nuläget.
 
 ### 6.1 Modes: Light vs Full
 
-Systemet stödjer två körlägen som styrs via headern `X-AZOM-Mode` (alternativt query `?mode=`). Middleware `app/middlewares/mode.py` läser in läget, sätter `request.state.mode` och ekar tillbaka `X-AZOM-Mode` i respons.
+Systemet stödjer två körlägen som styrs via headern `X-AZOM-Mode` (alternativt query `?mode=`). Båda apparna (Core API och Pipeline Server) registrerar `ModeMiddleware` (`app/middlewares/mode.py`) som läser in läget, sätter `request.state.mode` och ekar tillbaka `X-AZOM-Mode` i respons.
 
 - **Light**
   - RAG/embeddings av (centralt via `app/core/feature_flags.py: rag_enabled/allow_embeddings`).
@@ -141,7 +142,7 @@ curl -X POST http://localhost:8001/chat/azom \
 
 ## 7 Database
 Default: SQLite-fil `azom_pipelines.db` skapas automatiskt.
-Alembic migrering körs automatiskt av `run.sh` eller kan köras manuellt:
+Alembic migrering kan köras manuellt:
 ```bash
 alembic upgrade head
 ```

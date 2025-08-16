@@ -133,3 +133,29 @@ def test_chat_full_mode_over_cap_returns_413(client_with_dummy_llm):
         json={"message": msg, "car_model": "Volvo"},
     )
     assert resp.status_code == 413, resp.text
+
+
+@pytest.mark.parametrize("mode", ["light", "full"])
+def test_chat_mode_header_echo_with_header(client_with_dummy_llm, mode):
+    # Small payload to avoid caps
+    msg = "ok"
+    resp = client_with_dummy_llm.post(
+        "/chat/azom",
+        headers={"X-AZOM-Mode": mode},
+        json={"message": msg, "car_model": "Volvo"},
+    )
+    assert resp.status_code == 200, resp.text
+    # Middleware should echo the resolved mode
+    assert resp.headers.get("X-AZOM-Mode") == mode
+
+
+@pytest.mark.parametrize("mode", ["light", "full"])
+def test_chat_mode_header_echo_with_query_param(client_with_dummy_llm, mode):
+    # Small payload to avoid caps
+    msg = "ok"
+    resp = client_with_dummy_llm.post(
+        f"/chat/azom?mode={mode}",
+        json={"message": msg, "car_model": "Volvo"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.headers.get("X-AZOM-Mode") == mode

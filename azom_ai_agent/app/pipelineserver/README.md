@@ -22,7 +22,7 @@ pip install fastapi uvicorn pydantic
 
 ### 2. Starta servern
 ```bash
-uvicorn app.pipelineserver.app.main:app --reload --port 8001
+uvicorn app.pipelineserver.pipeline_app.main:app --reload --port 8001
 ```
 
 ### 3. Testa API:et

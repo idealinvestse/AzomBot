@@ -59,7 +59,7 @@ The agent supports two runtime modes that are propagated end-to-end via the `X-A
   - External LLMs disabled; backend forced to OpenWebUI/Ollama (`get_llm_client()` in `app/pipelineserver/pipeline_app/services/llm_client.py`).
   - LLM timeout: 10s (`llm_timeout_seconds`).
   - Payload cap: 8 KB for chat message (`payload_cap_bytes`) enforced in `chat_with_azom()` (`app/pipelineserver/pipeline_app/main.py`).
-  - Response echoes mode header `X-AZOM-Mode` when `ModeMiddleware` is enabled (see `app/middlewares/mode.py`). Core API includes it by default; Pipeline Server resolves mode per-request and does not echo unless you add the middleware.
+  - Response echoes mode header `X-AZOM-Mode` (both Core API and Pipeline Server register `ModeMiddleware` by default; see `app/middlewares/mode.py`).
 
 - **Full mode** (default)
   - RAG enabled; embeddings allowed.
@@ -69,7 +69,7 @@ The agent supports two runtime modes that are propagated end-to-end via the `X-A
 How mode is set/flowing:
 
 - Frontend stores current mode and attaches `X-AZOM-Mode` in all requests via `getModeHeaders()` (`frontend/src/lib/mode.ts`) used by `frontend/src/services/api.ts`.
-- Backend `ModeMiddleware` (Core API) resolves mode from header or `?mode=` and sets `request.state.mode`, and echoes it back (`app/middlewares/mode.py`). The Pipeline Server's `/chat/azom` resolves mode from `request.state` if present, otherwise from header/query, and will not echo unless `ModeMiddleware` is added to that app as well.
+- Backend `ModeMiddleware` (both apps) resolves mode from header or `?mode=` and sets `request.state.mode`, and echoes it back (`app/middlewares/mode.py`). The Pipeline Server's `/chat/azom` also defends against missing middleware but `ModeMiddleware` is enabled there by default.
 - Observability: request logs include mode (`app/middlewares/request_logging.py`), chat endpoint logs payload caps and RAG gating (`app/pipelineserver/pipeline_app/main.py`), and LLM backend selection/timeouts are logged (`llm_client.py`).
 
 Example (curl):
