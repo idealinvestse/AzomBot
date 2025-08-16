@@ -3,7 +3,8 @@ Values can be overridden via environment variables or a local .env file.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from pydantic import Field, AliasChoices
+from typing import Optional, List
 
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables.
@@ -35,6 +36,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_BASE_URL: Optional[str] = None
     LLM_BACKEND: Optional[str] = "openwebui"
+
+    # CORS (accepts env PIPELINE_CORS_ORIGINS or CORS_ORIGINS)
+    CORS_ORIGINS: List[str] = Field(
+        default_factory=lambda: ["*"],
+        validation_alias=AliasChoices("PIPELINE_CORS_ORIGINS", "CORS_ORIGINS"),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

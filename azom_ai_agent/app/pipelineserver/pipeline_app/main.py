@@ -27,14 +27,15 @@ app.add_middleware(RequestLoggingMiddleware)
 add_exception_handlers(app)
 
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS (configurable)
+if settings.CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 pipeline = AZOMInstallationPipeline()
 support_pipeline = SupportPipeline()
