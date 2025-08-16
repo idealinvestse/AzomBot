@@ -32,7 +32,7 @@ class ModeMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Echo for clients/observability
-        response.headers["X-AZOM-Mode"] = mode.value
+        response.headers["X-AZOM-Mode"] = mode.value.upper()
         return response
 
 
