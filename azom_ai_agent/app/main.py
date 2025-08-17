@@ -29,6 +29,9 @@ app = FastAPI(
     description="AZOM AI Agent API för integration med installationsguider och support."
 )
 
+# Expose settings via app.state for middlewares (e.g., RateLimitingMiddleware)
+app.state.settings = settings
+
 # Registrera API-routes
 app.include_router(health_router)
 app.include_router(diagnose_router)
